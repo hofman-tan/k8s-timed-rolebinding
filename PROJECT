@@ -7,4 +7,14 @@ layout:
 - go.kubebuilder.io/v4
 projectName: k8s-timed-rolebinding
 repo: github.com/hofman-tan/k8s-timed-rolebinding
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: hhh.github.io
+  group: rbac
+  kind: TimedRoleBinding
+  path: github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1
+  version: v1alpha1
 version: "3"

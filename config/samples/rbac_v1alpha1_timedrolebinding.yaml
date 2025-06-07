@@ -1,0 +1,19 @@
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: k8s-timed-rolebinding
+    app.kubernetes.io/managed-by: kustomize
+  name: timedrolebinding-sample
+spec:
+  subjects:
+    - kind: User
+      name: user1
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: Role
+    name: role1
+    apiGroup: rbac.authorization.k8s.io
+  startTime: 2025-06-07T07:00:00Z
+  endTime: 2025-06-07T08:00:00Z
+  keepExpiredFor: 1h
