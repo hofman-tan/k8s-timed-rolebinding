@@ -15,5 +15,5 @@ spec:
     name: role1
     apiGroup: rbac.authorization.k8s.io
   startTime: 2025-06-07T07:00:00Z
-  endTime: 2025-06-07T08:00:00Z
+  endTime: 2025-06-08T08:00:00Z
   keepExpiredFor: 1h

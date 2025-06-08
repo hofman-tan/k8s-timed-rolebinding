@@ -39,6 +39,7 @@ import (
 
 	rbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1"
 	"github.com/hofman-tan/k8s-timed-rolebinding/internal/controller"
+	webhookrbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -208,6 +209,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimedRoleBinding")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookrbacv1alpha1.SetupTimedRoleBindingWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "TimedRoleBinding")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

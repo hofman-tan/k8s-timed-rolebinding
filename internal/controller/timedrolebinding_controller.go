@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -67,48 +68,58 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	now := time.Now()
+	startTime := trb.Spec.StartTime.Time
+	endTime := trb.Spec.EndTime.Time
+
 	// Start time is in the future. Requeue after the time difference.
-	if trb.Spec.StartTime.Time.After(now) {
-		timeDiff := trb.Spec.StartTime.Time.Sub(now)
+	if startTime.After(now) {
+		timeDiff := startTime.Sub(now)
 
 		// Update the status phase to Pending
 		trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhasePending
+		trb.Status.Message = "TimedRoleBinding is queued for activation"
 		trb.Status.LastTransitionTime = metav1.Now()
+
+		// Make sure the associated RoleBinding is deleted
+		if err := r.deleteRoleBinding(ctx, trb); err != nil {
+			log.Error(err, "Failed to delete RoleBinding")
+			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
+			trb.Status.Message = fmt.Sprintf("Failed to delete RoleBinding: %v", err)
+			trb.Status.LastTransitionTime = metav1.Now()
+		}
+
 		if err := r.Status().Update(ctx, trb); err != nil {
 			log.Error(err, "Failed to update TimedRoleBinding status")
 			return ctrl.Result{}, err // TODO: handle error
 		}
 
-		// Make sure the associated RoleBinding is deleted
-		if err := r.deleteRoleBinding(ctx, trb); err != nil {
-			log.Error(err, "Failed to delete RoleBinding")
-			return ctrl.Result{}, err
-		}
-
 		// Requeue after the time difference
 		return ctrl.Result{RequeueAfter: timeDiff}, nil
-
 	}
 
 	// Start time is in the past/now. Create the role binding.
-	if trb.Spec.StartTime.Time.Before(now) || trb.Spec.StartTime.Time.Equal(now) {
+	if !startTime.After(now) {
 
-		// If the end time is in the past/now, the role binding is expired.
-		if trb.Spec.EndTime.Time.Before(now) || trb.Spec.EndTime.Time.Equal(now) {
+		// If the end time is in the past/now, the role binding has expired.
+		if !endTime.After(now) {
 			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseExpired
+			trb.Status.Message = "TimedRoleBinding has expired"
 			trb.Status.LastTransitionTime = metav1.Now()
+
+			// Make sure the associated RoleBinding is deleted
+			if err := r.deleteRoleBinding(ctx, trb); err != nil {
+				log.Error(err, "Failed to delete RoleBinding")
+				trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
+				trb.Status.Message = fmt.Sprintf("Failed to delete RoleBinding: %v", err)
+				trb.Status.LastTransitionTime = metav1.Now()
+			}
+
 			if err := r.Status().Update(ctx, trb); err != nil {
 				log.Error(err, "Failed to update TimedRoleBinding status")
 				return ctrl.Result{}, err // TODO: handle error
 			}
 
-			// Make sure the associated RoleBinding is deleted
-			if err := r.deleteRoleBinding(ctx, trb); err != nil {
-				log.Error(err, "Failed to delete RoleBinding")
-				return ctrl.Result{}, err
-			}
-
-			keepExpiry := trb.Spec.EndTime.Time.Add(trb.Spec.KeepExpiredFor.Duration)
+			keepExpiry := endTime.Add(trb.Spec.KeepExpiredFor.Duration)
 			// Keep the CRD if its KeepExpiredFor duration has not passed.
 			if now.Before(keepExpiry) {
 				// Requeue after the KeepExpiredFor duration.
@@ -119,27 +130,30 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			// Remove the CRD.
 			if err := r.Delete(ctx, trb); client.IgnoreNotFound(err) != nil {
 				log.Error(err, "Failed to delete TimedRoleBinding")
-				return ctrl.Result{}, err // TODO: handle error
+				return ctrl.Result{}, err
 			}
-
 			return ctrl.Result{}, nil
 		}
 
 		// If the end time is in the future, the role binding is active.
 		trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseActive
+		trb.Status.Message = "TimedRoleBinding is active"
 		trb.Status.LastTransitionTime = metav1.Now()
+
+		if err := r.createRoleBinding(ctx, trb); err != nil {
+			log.Error(err, "Failed to create RoleBinding")
+			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
+			trb.Status.Message = fmt.Sprintf("Failed to create RoleBinding: %v", err)
+			trb.Status.LastTransitionTime = metav1.Now()
+		}
+
 		if err := r.Status().Update(ctx, trb); err != nil {
 			log.Error(err, "Failed to update TimedRoleBinding status")
 			return ctrl.Result{}, err // TODO: handle error
 		}
 
-		if err := r.createRoleBinding(ctx, trb); err != nil {
-			log.Error(err, "Failed to create RoleBinding")
-			return ctrl.Result{}, err // TODO: handle error
-		}
-
 		// Requeue after the end time.
-		return ctrl.Result{RequeueAfter: trb.Spec.EndTime.Time.Sub(now)}, nil
+		return ctrl.Result{RequeueAfter: endTime.Sub(now)}, nil
 	}
 
 	return ctrl.Result{}, nil

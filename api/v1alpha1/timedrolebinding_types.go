@@ -26,8 +26,6 @@ import (
 
 // TimedRoleBindingSpec defines the desired state of TimedRoleBinding.
 type TimedRoleBindingSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	Subjects       []rbacv1.Subject `json:"subjects,omitempty"`
 	RoleRef        rbacv1.RoleRef   `json:"roleRef,omitempty"`
 	StartTime      metav1.Time      `json:"startTime,omitempty"`
@@ -49,6 +47,7 @@ type TimedRoleBindingStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Phase              TimedRoleBindingPhase `json:"phase,omitempty"`
+	Message            string                `json:"message,omitempty"`
 	LastTransitionTime metav1.Time           `json:"lastTransitionTime,omitempty"`
 }
 

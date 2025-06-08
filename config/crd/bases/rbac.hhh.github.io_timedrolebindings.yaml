@@ -67,9 +67,6 @@ spec:
                 format: date-time
                 type: string
               subjects:
-                description: |-
-                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file
                 items:
                   description: |-
                     Subject contains a reference to the object or user identities a role binding applies to.  This can either hold a direct API object reference,
@@ -106,6 +103,8 @@ spec:
             properties:
               lastTransitionTime:
                 format: date-time
+                type: string
+              message:
                 type: string
               phase:
                 description: |-
