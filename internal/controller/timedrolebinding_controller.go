@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,6 +45,9 @@ type TimedRoleBindingReconciler struct {
 // +kubebuilder:rbac:groups=rbac.hhh.github.io,resources=timedrolebindings/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=rbac.hhh.github.io,resources=timedrolebindings/finalizers,verbs=update
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=bind
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,verbs=bind
+// +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -75,23 +80,28 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if startTime.After(now) {
 		timeDiff := startTime.Sub(now)
 
-		// Update the status phase to Pending
-		trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhasePending
-		trb.Status.Message = "TimedRoleBinding is queued for activation"
-		trb.Status.LastTransitionTime = metav1.Now()
+		setStatus(
+			trb,
+			rbacv1alpha1.TimedRoleBindingPhasePending,
+			"TimedRoleBinding is queued for activation",
+		)
 
 		// Make sure the associated RoleBinding is deleted
 		if err := r.deleteRoleBinding(ctx, trb); err != nil {
 			log.Error(err, "Failed to delete RoleBinding")
-			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
-			trb.Status.Message = fmt.Sprintf("Failed to delete RoleBinding: %v", err)
-			trb.Status.LastTransitionTime = metav1.Now()
+			setStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseFailed,
+				fmt.Sprintf("Failed to delete RoleBinding: %v", err),
+			)
 		}
 
 		if err := r.Status().Update(ctx, trb); err != nil {
 			log.Error(err, "Failed to update TimedRoleBinding status")
 			return ctrl.Result{}, err // TODO: handle error
 		}
+
+		log.Info("TimedRoleBinding is queued for activation", "name", trb.Name, "namespace", trb.Namespace)
 
 		// Requeue after the time difference
 		return ctrl.Result{RequeueAfter: timeDiff}, nil
@@ -102,16 +112,20 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 		// If the end time is in the past/now, the role binding has expired.
 		if !endTime.After(now) {
-			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseExpired
-			trb.Status.Message = "TimedRoleBinding has expired"
-			trb.Status.LastTransitionTime = metav1.Now()
+			setStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseExpired,
+				"TimedRoleBinding has expired",
+			)
 
 			// Make sure the associated RoleBinding is deleted
 			if err := r.deleteRoleBinding(ctx, trb); err != nil {
 				log.Error(err, "Failed to delete RoleBinding")
-				trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
-				trb.Status.Message = fmt.Sprintf("Failed to delete RoleBinding: %v", err)
-				trb.Status.LastTransitionTime = metav1.Now()
+				setStatus(
+					trb,
+					rbacv1alpha1.TimedRoleBindingPhaseFailed,
+					fmt.Sprintf("Failed to delete RoleBinding: %v", err),
+				)
 			}
 
 			if err := r.Status().Update(ctx, trb); err != nil {
@@ -119,12 +133,32 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				return ctrl.Result{}, err // TODO: handle error
 			}
 
-			keepExpiry := endTime.Add(trb.Spec.KeepExpiredFor.Duration)
-			// Keep the CRD if its KeepExpiredFor duration has not passed.
-			if now.Before(keepExpiry) {
-				// Requeue after the KeepExpiredFor duration.
-				diff := keepExpiry.Sub(now)
-				return ctrl.Result{RequeueAfter: diff}, nil
+			if trb.Spec.KeepExpiredFor != nil {
+				keepDeadline := endTime.Add(trb.Spec.KeepExpiredFor.Duration)
+				// Keep the CRD if it's within the keepDeadline.
+				if now.Before(keepDeadline) {
+					// Create the postExpire job (if specified)
+					if isPostExpireJobEnabled(trb) {
+						log.Info("Creating postExpire job")
+						if err := r.createHookJob(
+							ctx,
+							trb,
+							trb.GetName()+"-post-expire",
+							*trb.Spec.PostExpire.JobTemplate.Spec.DeepCopy(),
+						); err != nil {
+							log.Error(err, "Failed to create postExpire job")
+							setStatus(
+								trb,
+								rbacv1alpha1.TimedRoleBindingPhaseFailed,
+								fmt.Sprintf("Failed to create postExpire job: %v", err),
+							)
+						}
+					}
+
+					// Requeue for deletion later.
+					diff := keepDeadline.Sub(now)
+					return ctrl.Result{RequeueAfter: diff}, nil
+				}
 			}
 
 			// Remove the CRD.
@@ -136,15 +170,37 @@ func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 
 		// If the end time is in the future, the role binding is active.
-		trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseActive
-		trb.Status.Message = "TimedRoleBinding is active"
-		trb.Status.LastTransitionTime = metav1.Now()
+		setStatus(
+			trb,
+			rbacv1alpha1.TimedRoleBindingPhaseActive,
+			"TimedRoleBinding is active",
+		)
 
 		if err := r.createRoleBinding(ctx, trb); err != nil {
 			log.Error(err, "Failed to create RoleBinding")
-			trb.Status.Phase = rbacv1alpha1.TimedRoleBindingPhaseFailed
-			trb.Status.Message = fmt.Sprintf("Failed to create RoleBinding: %v", err)
-			trb.Status.LastTransitionTime = metav1.Now()
+			setStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseFailed,
+				fmt.Sprintf("Failed to create RoleBinding: %v", err),
+			)
+		}
+
+		// Create the postActivate job (if specified)
+		if isPostActivateJobEnabled(trb) {
+			log.Info("Creating postActivate job")
+			if err := r.createHookJob(
+				ctx,
+				trb,
+				trb.GetName()+"-post-activate",
+				*trb.Spec.PostActivate.JobTemplate.Spec.DeepCopy(),
+			); err != nil {
+				log.Error(err, "Failed to create postActivate job")
+				setStatus(
+					trb,
+					rbacv1alpha1.TimedRoleBindingPhaseFailed,
+					fmt.Sprintf("Failed to create postActivate job: %v", err),
+				)
+			}
 		}
 
 		if err := r.Status().Update(ctx, trb); err != nil {
@@ -186,6 +242,49 @@ func (r *TimedRoleBindingReconciler) deleteRoleBinding(ctx context.Context, trb 
 			Namespace: trb.Namespace,
 		},
 	}); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+	return nil
+}
+
+func setStatus(trb *rbacv1alpha1.TimedRoleBinding, phase rbacv1alpha1.TimedRoleBindingPhase, msg string) {
+	trb.Status.Phase = phase
+	trb.Status.Message = msg
+	trb.Status.LastTransitionTime = metav1.Now()
+}
+
+func isPostActivateJobEnabled(trb *rbacv1alpha1.TimedRoleBinding) bool {
+	return trb.Spec.PostActivate != nil &&
+		trb.Spec.PostActivate.JobTemplate != nil
+}
+
+func isPostExpireJobEnabled(trb *rbacv1alpha1.TimedRoleBinding) bool {
+	return trb.Spec.PostExpire != nil &&
+		trb.Spec.PostExpire.JobTemplate != nil
+}
+
+func (r *TimedRoleBindingReconciler) createHookJob(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding, name string, spec batchv1.JobSpec) error {
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: trb.Namespace, // Same namespace as the TimedRoleBinding resource
+		},
+		Spec: spec,
+	}
+
+	// Inject the TimedRoleBinding name as env variable into the job's containers.
+	for i := range job.Spec.Template.Spec.Containers {
+		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
+			Name:  "TIMED_ROLE_BINDING_NAME",
+			Value: trb.Name,
+		})
+	}
+
+	// Sets the owner reference to the TimedRoleBinding.
+	// This ensures that the Job will be deleted when the TimedRoleBinding is deleted.
+	controllerutil.SetControllerReference(trb, job, r.Scheme)
+
+	if err := r.Create(ctx, job); client.IgnoreAlreadyExists(err) != nil {
 		return err
 	}
 	return nil

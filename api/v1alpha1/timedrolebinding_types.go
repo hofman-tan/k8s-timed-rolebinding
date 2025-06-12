@@ -17,21 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	batchv1 "k8s.io/api/batch/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-// TimedRoleBindingSpec defines the desired state of TimedRoleBinding.
-type TimedRoleBindingSpec struct {
-	Subjects       []rbacv1.Subject `json:"subjects,omitempty"`
-	RoleRef        rbacv1.RoleRef   `json:"roleRef,omitempty"`
-	StartTime      metav1.Time      `json:"startTime,omitempty"`
-	EndTime        metav1.Time      `json:"endTime,omitempty"`
-	KeepExpiredFor metav1.Duration  `json:"keepExpiredFor,omitempty"` // how long to keep the CRD after it expires
-}
 
 type TimedRoleBindingPhase string
 
@@ -41,6 +30,29 @@ const (
 	TimedRoleBindingPhaseExpired TimedRoleBindingPhase = "Expired"
 	TimedRoleBindingPhaseFailed  TimedRoleBindingPhase = "Failed"
 )
+
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+type PostActivate struct {
+	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
+}
+
+type PostExpire struct {
+	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
+}
+
+// TimedRoleBindingSpec defines the desired state of TimedRoleBinding.
+type TimedRoleBindingSpec struct {
+	Subjects       []rbacv1.Subject `json:"subjects"`
+	RoleRef        rbacv1.RoleRef   `json:"roleRef"`
+	StartTime      metav1.Time      `json:"startTime"`
+	EndTime        metav1.Time      `json:"endTime"`
+	KeepExpiredFor *metav1.Duration `json:"keepExpiredFor,omitempty"` // how long to keep the CRD after it expires
+	// Hooks
+	PostActivate *PostActivate `json:"postActivate,omitempty"`
+	PostExpire   *PostExpire   `json:"postExpire,omitempty"`
+}
 
 // TimedRoleBindingStatus defines the observed state of TimedRoleBinding.
 type TimedRoleBindingStatus struct {
@@ -53,6 +65,8 @@ type TimedRoleBindingStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // TimedRoleBinding is the Schema for the timedrolebindings API.
 type TimedRoleBinding struct {

@@ -36,7 +36,7 @@ import (
 
 // nolint:unused
 // log is for logging in this package.
-var timedrolebindinglog = logf.Log.WithName("timedrolebinding-resource")
+var trbLog = logf.Log.WithName("timedrolebinding-resource")
 
 // SetupTimedRoleBindingWebhookWithManager registers the webhook for TimedRoleBinding in the manager.
 func SetupTimedRoleBindingWebhookWithManager(mgr ctrl.Manager) error {
@@ -65,16 +65,17 @@ var _ webhook.CustomDefaulter = &TimedRoleBindingCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind TimedRoleBinding.
 func (d *TimedRoleBindingCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	timedrolebinding, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
+	trb, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
 
 	if !ok {
 		return fmt.Errorf("expected an TimedRoleBinding object but got %T", obj)
 	}
-	timedrolebindinglog.Info("Defaulting for TimedRoleBinding", "name", timedrolebinding.GetName())
+	trbLog.Info("Defaulting for TimedRoleBinding", "name", trb.GetName())
 
 	// Apply defaults
-	if timedrolebinding.Spec.KeepExpiredFor.Duration == 0 {
-		timedrolebinding.Spec.KeepExpiredFor = d.DefaultKeepExpiredFor
+	if trb.Spec.KeepExpiredFor == nil {
+		trbLog.Info("Defaulting keepExpiredFor", "name", trb.GetName())
+		trb.Spec.KeepExpiredFor = &d.DefaultKeepExpiredFor
 	}
 
 	return nil
@@ -98,59 +99,59 @@ var _ webhook.CustomValidator = &TimedRoleBindingCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TimedRoleBinding.
 func (v *TimedRoleBindingCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	timedrolebinding, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
+	trb, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
 	if !ok {
 		return nil, fmt.Errorf("expected a TimedRoleBinding object but got %T", obj)
 	}
-	timedrolebindinglog.Info("Validation for TimedRoleBinding upon creation", "name", timedrolebinding.GetName())
+	trbLog.Info("Validation for TimedRoleBinding upon creation", "name", trb.GetName())
 
 	// TODO(user): fill in your validation logic upon object creation.
 
-	return nil, validateTimedRoleBinding(timedrolebinding)
+	return nil, validateTimedRoleBinding(trb)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TimedRoleBinding.
 func (v *TimedRoleBindingCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	timedrolebinding, ok := newObj.(*rbacv1alpha1.TimedRoleBinding)
+	trb, ok := newObj.(*rbacv1alpha1.TimedRoleBinding)
 	if !ok {
 		return nil, fmt.Errorf("expected a TimedRoleBinding object for the newObj but got %T", newObj)
 	}
-	timedrolebindinglog.Info("Validation for TimedRoleBinding upon update", "name", timedrolebinding.GetName())
+	trbLog.Info("Validation for TimedRoleBinding upon update", "name", trb.GetName())
 
 	// TODO(user): fill in your validation logic upon object update.
 
-	return nil, validateTimedRoleBinding(timedrolebinding)
+	return nil, validateTimedRoleBinding(trb)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TimedRoleBinding.
 func (v *TimedRoleBindingCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	timedrolebinding, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
+	trb, ok := obj.(*rbacv1alpha1.TimedRoleBinding)
 	if !ok {
 		return nil, fmt.Errorf("expected a TimedRoleBinding object but got %T", obj)
 	}
-	timedrolebindinglog.Info("Validation for TimedRoleBinding upon deletion", "name", timedrolebinding.GetName())
+	trbLog.Info("Validation for TimedRoleBinding upon deletion", "name", trb.GetName())
 
 	// TODO(user): fill in your validation logic upon object deletion.
 
 	return nil, nil
 }
 
-func validateTimedRoleBinding(timedrolebinding *rbacv1alpha1.TimedRoleBinding) error {
+func validateTimedRoleBinding(trb *rbacv1alpha1.TimedRoleBinding) error {
 	var allErrs field.ErrorList
 
 	// Start time must be before end time
-	if !timedrolebinding.Spec.StartTime.Before(&timedrolebinding.Spec.EndTime) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), timedrolebinding.Spec.StartTime, "start time must be before end time"))
+	if !trb.Spec.StartTime.Before(&trb.Spec.EndTime) {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), trb.Spec.StartTime, "start time must be before end time"))
 	}
 
 	// End time must be after now
 	now := metav1.Now()
-	if !timedrolebinding.Spec.EndTime.After(now.Time) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), timedrolebinding.Spec.EndTime, "end time must be after now"))
+	if !trb.Spec.EndTime.After(now.Time) {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), trb.Spec.EndTime, "end time must be after now"))
 	}
 
 	if len(allErrs) > 0 {
-		return errors.NewInvalid(schema.GroupKind{Group: rbacv1alpha1.GroupVersion.Group, Kind: "TimedRoleBinding"}, timedrolebinding.Name, allErrs)
+		return errors.NewInvalid(schema.GroupKind{Group: rbacv1alpha1.GroupVersion.Group, Kind: "TimedRoleBinding"}, trb.Name, allErrs)
 	}
 
 	return nil
