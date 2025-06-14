@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/rbac.hhh.github.io_timedrolebindings.yaml
+- bases/rbac.hhh.github.io_timedclusterrolebindings.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

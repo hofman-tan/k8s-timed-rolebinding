@@ -19,13 +19,7 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
-  - clusterroles
-  - roles
-  verbs:
-  - bind
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
+  - clusterrolebindings
   - rolebindings
   verbs:
   - create
@@ -36,8 +30,16 @@ rules:
   - update
   - watch
 - apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  - roles
+  verbs:
+  - bind
+- apiGroups:
   - rbac.hhh.github.io
   resources:
+  - timedclusterrolebindings
   - timedrolebindings
   verbs:
   - create
@@ -50,12 +52,14 @@ rules:
 - apiGroups:
   - rbac.hhh.github.io
   resources:
+  - timedclusterrolebindings/finalizers
   - timedrolebindings/finalizers
   verbs:
   - update
 - apiGroups:
   - rbac.hhh.github.io
   resources:
+  - timedclusterrolebindings/status
   - timedrolebindings/status
   verbs:
   - get

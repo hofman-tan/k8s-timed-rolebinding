@@ -4,15 +4,15 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.2
-  name: timedrolebindings.rbac.hhh.github.io
+  name: timedclusterrolebindings.rbac.hhh.github.io
 spec:
   group: rbac.hhh.github.io
   names:
-    kind: TimedRoleBinding
-    listKind: TimedRoleBindingList
-    plural: timedrolebindings
-    singular: timedrolebinding
-  scope: Namespaced
+    kind: TimedClusterRoleBinding
+    listKind: TimedClusterRoleBindingList
+    plural: timedclusterrolebindings
+    singular: timedclusterrolebinding
+  scope: Cluster
   versions:
   - additionalPrinterColumns:
     - jsonPath: .status.phase
@@ -24,7 +24,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TimedRoleBinding is the Schema for the timedrolebindings API.
+        description: TimedClusterRoleBinding is the Schema for the timedclusterrolebindings
+          API.
         properties:
           apiVersion:
             description: |-

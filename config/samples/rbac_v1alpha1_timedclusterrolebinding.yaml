@@ -1,0 +1,45 @@
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: k8s-timed-rolebinding
+    app.kubernetes.io/managed-by: kustomize
+  name: timedclusterrolebinding-sample
+spec:
+  subjects:
+    - kind: User
+      name: user1
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: ClusterRole
+    name: clusterrole1
+    apiGroup: rbac.authorization.k8s.io
+  startTime: 2025-06-14T06:00:00Z
+  endTime: 2025-06-14T09:40:00Z
+  # keepExpiredFor: 1h
+  postActivate:
+    jobTemplate:
+      metadata:
+        namespace: ns1
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: timedclusterrolebinding-sample
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has activated"]
+  postExpire:
+    jobTemplate:
+      metadata:
+        namespace: ns1
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: timedclusterrolebinding-sample
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has expired"]

@@ -34,12 +34,17 @@ const (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type JobTemplateSpec struct {
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              batchv1.JobSpec `json:"spec"`
+}
+
 type PostActivate struct {
-	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
+	JobTemplate *JobTemplateSpec `json:"jobTemplate,omitempty"`
 }
 
 type PostExpire struct {
-	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
+	JobTemplate *JobTemplateSpec `json:"jobTemplate,omitempty"`
 }
 
 // TimedRoleBindingSpec defines the desired state of TimedRoleBinding.
@@ -49,9 +54,8 @@ type TimedRoleBindingSpec struct {
 	StartTime      metav1.Time      `json:"startTime"`
 	EndTime        metav1.Time      `json:"endTime"`
 	KeepExpiredFor *metav1.Duration `json:"keepExpiredFor,omitempty"` // how long to keep the CRD after it expires
-	// Hooks
-	PostActivate *PostActivate `json:"postActivate,omitempty"`
-	PostExpire   *PostExpire   `json:"postExpire,omitempty"`
+	PostActivate   *PostActivate    `json:"postActivate,omitempty"`
+	PostExpire     *PostExpire      `json:"postExpire,omitempty"`
 }
 
 // TimedRoleBindingStatus defines the observed state of TimedRoleBinding.
@@ -65,6 +69,7 @@ type TimedRoleBindingStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
@@ -78,6 +83,7 @@ type TimedRoleBinding struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // TimedRoleBindingList contains a list of TimedRoleBinding.
 type TimedRoleBindingList struct {

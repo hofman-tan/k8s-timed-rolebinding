@@ -141,13 +141,13 @@ func validateTimedRoleBinding(trb *rbacv1alpha1.TimedRoleBinding) error {
 
 	// Start time must be before end time
 	if !trb.Spec.StartTime.Before(&trb.Spec.EndTime) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), trb.Spec.StartTime, "start time must be before end time"))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), trb.Spec.StartTime, "startTime must be before end time"))
 	}
 
 	// End time must be after now
 	now := metav1.Now()
 	if !trb.Spec.EndTime.After(now.Time) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), trb.Spec.EndTime, "end time must be after now"))
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), trb.Spec.EndTime, "endTime must be after now"))
 	}
 
 	if len(allErrs) > 0 {

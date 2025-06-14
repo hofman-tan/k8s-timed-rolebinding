@@ -112,6 +112,9 @@ var _ = BeforeSuite(func() {
 	err = SetupTimedRoleBindingWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupTimedClusterRoleBindingWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

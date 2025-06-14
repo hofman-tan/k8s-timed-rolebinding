@@ -10,6 +10,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-rbac-hhh-github-io-v1alpha1-timedclusterrolebinding
+  failurePolicy: Fail
+  name: mtimedclusterrolebinding-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - rbac.hhh.github.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - timedclusterrolebindings
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-rbac-hhh-github-io-v1alpha1-timedrolebinding
   failurePolicy: Fail
   name: mtimedrolebinding-v1alpha1.kb.io
@@ -30,6 +50,26 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-rbac-hhh-github-io-v1alpha1-timedclusterrolebinding
+  failurePolicy: Fail
+  name: vtimedclusterrolebinding-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - rbac.hhh.github.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - timedclusterrolebindings
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   clientConfig:
