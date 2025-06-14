@@ -3,18 +3,19 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	rbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Reconciler is an interface for the reconciler that handles both TimedRoleBinding and TimedClusterRoleBinding
 type Reconciler[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleBinding] interface {
 	GetObject(ctx context.Context, req ctrl.Request) (*T, error)
+	DeleteObject(ctx context.Context, trb *T) error
 	CreateRoleBinding(ctx context.Context, trb *T) error
 	DeleteRoleBinding(ctx context.Context, trb *T) error
 	CreateHookJob(ctx context.Context, trb *T, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error
@@ -30,6 +31,7 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	ctx context.Context,
 	req ctrl.Request,
 	r Reconciler[T],
+	name string,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -37,10 +39,10 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// TimedRoleBinding not found. No need to requeue.
-			log.Info("TimedRoleBinding not found. Ignoring since it must have been deleted")
+			log.Info(fmt.Sprintf("%s not found. Ignoring since it must have been deleted", name))
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "Failed to get TimedRoleBinding")
+		log.Error(err, fmt.Sprintf("Failed to get %s", name))
 		return ctrl.Result{}, err
 	}
 
@@ -49,14 +51,12 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	startTime := spec.StartTime.Time
 	endTime := spec.EndTime.Time
 
-	// Start time is in the future. Requeue after the time difference.
+	// Pending activation
 	if startTime.After(now) {
-		timeDiff := startTime.Sub(now)
-
 		r.SetObjectStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhasePending,
-			"TimedRoleBinding is queued for activation",
+			fmt.Sprintf("%s is queued for activation", name),
 		)
 
 		// Make sure the associated RoleBinding is deleted
@@ -70,92 +70,29 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 		}
 
 		if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-			log.Error(err, "Failed to update TimedRoleBinding status")
+			log.Error(err, fmt.Sprintf("Failed to update %s status", name))
 			return ctrl.Result{}, err
 		}
 
-		log.Info("TimedRoleBinding is queued for activation", "name", r.GetObjectName(trb), "namespace", r.GetObjectNamespace(trb))
+		log.Info(fmt.Sprintf("%s is queued for activation", name), "name", r.GetObjectName(trb), "namespace", r.GetObjectNamespace(trb))
 
-		// Requeue after the time difference
-		return ctrl.Result{RequeueAfter: timeDiff}, nil
+		// Requeue for activation
+		return ctrl.Result{RequeueAfter: startTime.Sub(now)}, nil
 	}
 
-	// Start time is in the past/now. Create the role binding.
-	if !startTime.After(now) {
-
-		// If the end time is in the past/now, the role binding has expired.
-		if !endTime.After(now) {
-			r.SetObjectStatus(
-				trb,
-				rbacv1alpha1.TimedRoleBindingPhaseExpired,
-				"TimedRoleBinding has expired",
-			)
-
-			// Make sure the associated RoleBinding is deleted
-			if err := r.DeleteRoleBinding(ctx, trb); err != nil {
-				log.Error(err, "Failed to delete RoleBinding")
-				r.SetObjectStatus(
-					trb,
-					rbacv1alpha1.TimedRoleBindingPhaseFailed,
-					fmt.Sprintf("Failed to delete RoleBinding: %v", err),
-				)
-			}
-
-			if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-				log.Error(err, "Failed to update TimedRoleBinding status")
-				return ctrl.Result{}, err
-			}
-
-			if spec.KeepExpiredFor != nil {
-				keepDeadline := endTime.Add(spec.KeepExpiredFor.Duration)
-				// Keep the CRD if it's within the keepDeadline.
-				if now.Before(keepDeadline) {
-					// Create the postExpire job (if specified)
-					if isPostExpireJobEnabled(&spec) {
-						log.Info("Creating postExpire job")
-						if err := r.CreateHookJob(
-							ctx,
-							trb,
-							r.GetObjectName(trb)+"-post-expire",
-							*spec.PostExpire.JobTemplate.DeepCopy(),
-						); err != nil {
-							log.Error(err, "Failed to create postExpire job")
-							r.SetObjectStatus(
-								trb,
-								rbacv1alpha1.TimedRoleBindingPhaseFailed,
-								fmt.Sprintf("Failed to create postExpire job: %v", err),
-							)
-						}
-					}
-
-					// Requeue for deletion later.
-					diff := keepDeadline.Sub(now)
-					return ctrl.Result{RequeueAfter: diff}, nil
-				}
-			}
-
-			// Remove the CRD.
-			if err := r.DeleteRoleBinding(ctx, trb); client.IgnoreNotFound(err) != nil {
-				log.Error(err, "Failed to delete TimedRoleBinding")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
-		}
-
-		// If the end time is in the future, the role binding is active.
+	// Active
+	if !startTime.After(now) && endTime.After(now) {
 		r.SetObjectStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhaseActive,
-			"TimedRoleBinding is active",
+			fmt.Sprintf("%s is active", name),
 		)
+
+		errs := []string{}
 
 		if err := r.CreateRoleBinding(ctx, trb); err != nil {
 			log.Error(err, "Failed to create RoleBinding")
-			r.SetObjectStatus(
-				trb,
-				rbacv1alpha1.TimedRoleBindingPhaseFailed,
-				fmt.Sprintf("Failed to create RoleBinding: %v", err),
-			)
+			errs = append(errs, fmt.Sprintf("Failed to create RoleBinding: %v", err))
 		}
 
 		// Create the postActivate job (if specified)
@@ -168,21 +105,82 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 				*spec.PostActivate.JobTemplate.DeepCopy(),
 			); err != nil {
 				log.Error(err, "Failed to create postActivate job")
-				r.SetObjectStatus(
-					trb,
-					rbacv1alpha1.TimedRoleBindingPhaseFailed,
-					fmt.Sprintf("Failed to create postActivate job: %v", err),
-				)
+				errs = append(errs, fmt.Sprintf("Failed to create postActivate job: %v", err))
 			}
 		}
 
+		if len(errs) > 0 {
+			r.SetObjectStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseFailed,
+				fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+			)
+		}
+
 		if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-			log.Error(err, "Failed to update TimedRoleBinding status")
+			log.Error(err, fmt.Sprintf("Failed to update %s status", name))
 			return ctrl.Result{}, err
 		}
 
-		// Requeue after the end time.
+		// Requeue for expiration
 		return ctrl.Result{RequeueAfter: endTime.Sub(now)}, nil
+	}
+
+	// Expired
+	r.SetObjectStatus(
+		trb,
+		rbacv1alpha1.TimedRoleBindingPhaseExpired,
+		fmt.Sprintf("%s has expired", name),
+	)
+
+	errs := []string{}
+
+	// Make sure role binding is deleted
+	if err := r.DeleteRoleBinding(ctx, trb); err != nil {
+		log.Error(err, "Failed to delete RoleBinding")
+		errs = append(errs, fmt.Sprintf("Failed to delete RoleBinding: %v", err))
+	}
+
+	// Create the postExpire job (if specified)
+	if isPostExpireJobEnabled(&spec) {
+		log.Info("Creating postExpire job")
+		if err := r.CreateHookJob(
+			ctx,
+			trb,
+			r.GetObjectName(trb)+"-post-expire",
+			*spec.PostExpire.JobTemplate.DeepCopy(),
+		); err != nil {
+			log.Error(err, "Failed to create postExpire job")
+			errs = append(errs, fmt.Sprintf("Failed to create postExpire job: %v", err))
+		}
+	}
+
+	if len(errs) > 0 {
+		r.SetObjectStatus(
+			trb,
+			rbacv1alpha1.TimedRoleBindingPhaseFailed,
+			fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+		)
+	}
+
+	if err := r.UpdateObjectStatus(ctx, trb); err != nil {
+		log.Error(err, fmt.Sprintf("Failed to update %s status", name))
+		return ctrl.Result{}, err
+	}
+
+	if spec.KeepExpiredFor != nil {
+		keepDeadline := endTime.Add(spec.KeepExpiredFor.Duration)
+		if now.Before(keepDeadline) {
+			// Requeue for deletion later.
+			diff := keepDeadline.Sub(now)
+			return ctrl.Result{RequeueAfter: diff}, nil
+		}
+	}
+
+	// Remove the CR
+	if err := r.DeleteObject(ctx, trb); err != nil {
+		log.Error(err, fmt.Sprintf("Failed to delete %s", name))
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil

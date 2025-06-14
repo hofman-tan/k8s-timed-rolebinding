@@ -45,7 +45,7 @@ type TimedRoleBindingReconciler struct {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconciles(ctx, req, r)
+	return reconciles(ctx, req, r, "TimedRoleBinding")
 }
 
 func (r *TimedRoleBindingReconciler) GetObject(ctx context.Context, req ctrl.Request) (*rbacv1alpha1.TimedRoleBinding, error) {
@@ -56,7 +56,13 @@ func (r *TimedRoleBindingReconciler) GetObject(ctx context.Context, req ctrl.Req
 	return trb, nil
 }
 
-// CreateRoleBinding creates the associated RoleBinding
+func (r *TimedRoleBindingReconciler) DeleteObject(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
+	if err := r.Delete(ctx, trb); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *TimedRoleBindingReconciler) CreateRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,9 +72,6 @@ func (r *TimedRoleBindingReconciler) CreateRoleBinding(ctx context.Context, trb 
 		Subjects: trb.Spec.Subjects,
 		RoleRef:  trb.Spec.RoleRef,
 	}
-
-	// Sets the owner reference to the TimedRoleBinding.
-	// This ensures that the RoleBinding will be deleted when the TimedRoleBinding is deleted.
 	controllerutil.SetControllerReference(trb, roleBinding, r.Scheme)
 
 	if err := r.Create(ctx, roleBinding); client.IgnoreAlreadyExists(err) != nil {
@@ -77,7 +80,6 @@ func (r *TimedRoleBindingReconciler) CreateRoleBinding(ctx context.Context, trb 
 	return nil
 }
 
-// DeleteRoleBinding deletes the associated RoleBinding
 func (r *TimedRoleBindingReconciler) DeleteRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
 	if err := r.Delete(ctx, &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,7 +92,6 @@ func (r *TimedRoleBindingReconciler) DeleteRoleBinding(ctx context.Context, trb 
 	return nil
 }
 
-// CreateHookJob creates a hook job
 func (r *TimedRoleBindingReconciler) CreateHookJob(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -100,16 +101,13 @@ func (r *TimedRoleBindingReconciler) CreateHookJob(ctx context.Context, trb *rba
 		Spec: templateSpec.Spec,
 	}
 
-	// Inject the TimedRoleBinding name as env variable into the job's containers.
+	// Inject the CR name as env variable into the containers.
 	for i := range job.Spec.Template.Spec.Containers {
 		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
 			Name:  "TIMED_ROLE_BINDING_NAME",
 			Value: trb.GetName(),
 		})
 	}
-
-	// Sets the owner reference to the TimedRoleBinding.
-	// This ensures that the Job will be deleted when the TimedRoleBinding is deleted.
 	controllerutil.SetControllerReference(trb, job, r.Scheme)
 
 	if err := r.Create(ctx, job); client.IgnoreAlreadyExists(err) != nil {
@@ -140,6 +138,7 @@ func (r *TimedRoleBindingReconciler) SetObjectStatus(trb *rbacv1alpha1.TimedRole
 }
 
 func (r *TimedRoleBindingReconciler) UpdateObjectStatus(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
+	trb.Status.LastTransitionTime = metav1.Now()
 	return r.Status().Update(ctx, trb)
 }
 

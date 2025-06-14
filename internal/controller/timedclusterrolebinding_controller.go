@@ -54,7 +54,7 @@ type TimedClusterRoleBindingReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *TimedClusterRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconciles(ctx, req, r)
+	return reconciles(ctx, req, r, "TimedClusterRoleBinding")
 }
 
 func (r *TimedClusterRoleBindingReconciler) GetObject(ctx context.Context, req ctrl.Request) (*rbacv1alpha1.TimedClusterRoleBinding, error) {
@@ -65,7 +65,13 @@ func (r *TimedClusterRoleBindingReconciler) GetObject(ctx context.Context, req c
 	return trb, nil
 }
 
-// CreateRoleBinding creates the associated ClusterRoleBinding
+func (r *TimedClusterRoleBindingReconciler) DeleteObject(ctx context.Context, trb *rbacv1alpha1.TimedClusterRoleBinding) error {
+	if err := r.Delete(ctx, trb); client.IgnoreNotFound(err) != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *TimedClusterRoleBindingReconciler) CreateRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedClusterRoleBinding) error {
 	roleBinding := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,9 +80,6 @@ func (r *TimedClusterRoleBindingReconciler) CreateRoleBinding(ctx context.Contex
 		Subjects: trb.Spec.Subjects,
 		RoleRef:  trb.Spec.RoleRef,
 	}
-
-	// Sets the owner reference to the TimedClusterRoleBinding.
-	// This ensures that the ClusterRoleBinding will be deleted when the TimedClusterRoleBinding is deleted.
 	controllerutil.SetControllerReference(trb, roleBinding, r.Scheme)
 
 	if err := r.Create(ctx, roleBinding); client.IgnoreAlreadyExists(err) != nil {
@@ -85,7 +88,6 @@ func (r *TimedClusterRoleBindingReconciler) CreateRoleBinding(ctx context.Contex
 	return nil
 }
 
-// DeleteRoleBinding deletes the associated ClusterRoleBinding
 func (r *TimedClusterRoleBindingReconciler) DeleteRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedClusterRoleBinding) error {
 	if err := r.Delete(ctx, &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -97,26 +99,22 @@ func (r *TimedClusterRoleBindingReconciler) DeleteRoleBinding(ctx context.Contex
 	return nil
 }
 
-// CreateHookJob creates a hook job
 func (r *TimedClusterRoleBindingReconciler) CreateHookJob(ctx context.Context, trb *rbacv1alpha1.TimedClusterRoleBinding, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: templateSpec.Namespace, // job must have a namespace
+			Namespace: templateSpec.GetNamespace(), // job must have a namespace
 		},
 		Spec: templateSpec.Spec,
 	}
 
-	// Inject the TimedClusterRoleBinding name as env variable into the job's containers.
+	// Inject the CR name as env variable into the containers.
 	for i := range job.Spec.Template.Spec.Containers {
 		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
 			Name:  "TIMED_CLUSTER_ROLE_BINDING_NAME",
 			Value: trb.GetName(),
 		})
 	}
-
-	// Sets the owner reference to the TimedClusterRoleBinding.
-	// This ensures that the Job will be deleted when the TimedClusterRoleBinding is deleted.
 	controllerutil.SetControllerReference(trb, job, r.Scheme)
 
 	if err := r.Create(ctx, job); client.IgnoreAlreadyExists(err) != nil {
@@ -147,6 +145,7 @@ func (r *TimedClusterRoleBindingReconciler) SetObjectStatus(trb *rbacv1alpha1.Ti
 }
 
 func (r *TimedClusterRoleBindingReconciler) UpdateObjectStatus(ctx context.Context, trb *rbacv1alpha1.TimedClusterRoleBinding) error {
+	trb.Status.LastTransitionTime = metav1.Now()
 	return r.Status().Update(ctx, trb)
 }
 

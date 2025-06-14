@@ -138,27 +138,17 @@ func (v *TimedClusterRoleBindingCustomValidator) ValidateDelete(ctx context.Cont
 	return nil, nil
 }
 
-// TODO: consolidate with validateTimedRoleBinding
 func validateTimedClusterRoleBinding(trb *rbacv1alpha1.TimedClusterRoleBinding) error {
 	var allErrs field.ErrorList
+	spec := trb.Spec
+	allErrs = append(allErrs, validateSpec(&spec)...)
 
-	// Start time must be before end time
-	if !trb.Spec.StartTime.Before(&trb.Spec.EndTime) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), trb.Spec.StartTime, "startTime must be before end time"))
+	// In TimedClusterRoleBindings, jobs must always have a namespace (if specified)
+	if spec.PostActivate != nil && spec.PostActivate.JobTemplate != nil && spec.PostActivate.JobTemplate.GetNamespace() == "" {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("postActivate").Child("jobTemplate").Child("namespace"), spec.PostActivate.JobTemplate.Namespace, "namespace must be present in jobTemplate for TimedClusterRoleBinding"))
 	}
-
-	// End time must be after now
-	now := metav1.Now()
-	if !trb.Spec.EndTime.After(now.Time) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), trb.Spec.EndTime, "endTime must be after now"))
-	}
-
-	// For TimedClusterRoleBinding, jobs must always have a namespace (if specified)
-	if trb.Spec.PostActivate != nil && trb.Spec.PostActivate.JobTemplate != nil && trb.Spec.PostActivate.JobTemplate.GetNamespace() == "" {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("postActivate").Child("jobTemplate").Child("namespace"), trb.Spec.PostActivate.JobTemplate.Namespace, "namespace must be present in jobTemplate for TimedClusterRoleBinding"))
-	}
-	if trb.Spec.PostExpire != nil && trb.Spec.PostExpire.JobTemplate != nil && trb.Spec.PostExpire.JobTemplate.GetNamespace() == "" {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("postExpire").Child("jobTemplate").Child("namespace"), trb.Spec.PostExpire.JobTemplate.Namespace, "namespace must be present in jobTemplate for TimedClusterRoleBinding"))
+	if spec.PostExpire != nil && spec.PostExpire.JobTemplate != nil && spec.PostExpire.JobTemplate.GetNamespace() == "" {
+		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("postExpire").Child("jobTemplate").Child("namespace"), spec.PostExpire.JobTemplate.Namespace, "namespace must be present in jobTemplate for TimedClusterRoleBinding"))
 	}
 
 	if len(allErrs) > 0 {

@@ -138,21 +138,27 @@ func (v *TimedRoleBindingCustomValidator) ValidateDelete(ctx context.Context, ob
 
 func validateTimedRoleBinding(trb *rbacv1alpha1.TimedRoleBinding) error {
 	var allErrs field.ErrorList
-
-	// Start time must be before end time
-	if !trb.Spec.StartTime.Before(&trb.Spec.EndTime) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("startTime"), trb.Spec.StartTime, "startTime must be before end time"))
-	}
-
-	// End time must be after now
-	now := metav1.Now()
-	if !trb.Spec.EndTime.After(now.Time) {
-		allErrs = append(allErrs, field.Invalid(field.NewPath("spec").Child("endTime"), trb.Spec.EndTime, "endTime must be after now"))
-	}
+	allErrs = append(allErrs, validateSpec(&trb.Spec)...)
 
 	if len(allErrs) > 0 {
 		return errors.NewInvalid(schema.GroupKind{Group: rbacv1alpha1.GroupVersion.Group, Kind: "TimedRoleBinding"}, trb.Name, allErrs)
 	}
-
 	return nil
+}
+
+func validateSpec(spec *rbacv1alpha1.TimedRoleBindingSpec) field.ErrorList {
+	var errs field.ErrorList
+
+	// Start time must be before end time
+	if !spec.StartTime.Before(&spec.EndTime) {
+		errs = append(errs, field.Invalid(field.NewPath("spec").Child("startTime"), spec.StartTime, "startTime must be before end time"))
+	}
+
+	// End time must be after now
+	now := metav1.Now()
+	if !spec.EndTime.After(now.Time) {
+		errs = append(errs, field.Invalid(field.NewPath("spec").Child("endTime"), spec.EndTime, "endTime must be after now"))
+	}
+
+	return errs
 }

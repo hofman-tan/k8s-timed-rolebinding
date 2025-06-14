@@ -15,8 +15,8 @@ spec:
     name: role1
     apiGroup: rbac.authorization.k8s.io
   startTime: 2025-06-14T06:00:00Z
-  endTime: 2025-06-14T09:40:00Z
-  # keepExpiredFor: 1h
+  endTime: 2025-06-14T09:18:00Z
+  keepExpiredFor: 1h
   postActivate:
     jobTemplate:
       spec:
@@ -28,14 +28,14 @@ spec:
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args: ["echo $TIMED_ROLE_BINDING_NAME has been activated"]
-  # postExpire:
-  #   jobTemplate:
-  #     spec:
-  #       template:
-  #         spec:
-  #           restartPolicy: Never
-  #           containers:
-  #             - name: post-expire-job
-  #               image: busybox
-  #               command: ["/bin/sh", "-c"]
-  #               args: ["echo $TIMED_ROLE_BINDING_NAME has expired"]
+  postExpire:
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: post-expire-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_ROLE_BINDING_NAME has expired"]

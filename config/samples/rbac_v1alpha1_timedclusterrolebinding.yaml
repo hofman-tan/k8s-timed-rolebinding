@@ -16,11 +16,11 @@ spec:
     apiGroup: rbac.authorization.k8s.io
   startTime: 2025-06-14T06:00:00Z
   endTime: 2025-06-14T09:40:00Z
-  # keepExpiredFor: 1h
+  keepExpiredFor: 1h
   postActivate:
     jobTemplate:
       metadata:
-        namespace: ns1
+        namespace: ns1 # namespace where this job will be created
       spec:
         template:
           spec:
@@ -29,11 +29,12 @@ spec:
               - name: timedclusterrolebinding-sample
                 image: busybox
                 command: ["/bin/sh", "-c"]
-                args: ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has activated"]
+                args:
+                  ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has been activated"]
   postExpire:
     jobTemplate:
       metadata:
-        namespace: ns1
+        namespace: ns1 # namespace where this job will be created
       spec:
         template:
           spec:
