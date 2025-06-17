@@ -1,135 +1,164 @@
 # k8s-timed-rolebinding
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+A Kubernetes operator that enables time-bound RBAC permissions through custom resources that automatically create and delete RoleBindings and ClusterRoleBindings based on specified time windows.
 
-## Getting Started
+## Features
 
-### Prerequisites
-- go version v1.23.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- **TimedRoleBinding**: Namespace-scoped resource for managing time-bound RoleBindings
+- **TimedClusterRoleBinding**: Cluster-scoped resource for managing time-bound ClusterRoleBindings
+- Automatic cleanup of expired bindings
+- Post-activation and post-expiration job hooks
+- Configurable retention period for expired resources
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+## Prerequisites
 
-```sh
-make docker-build docker-push IMG=<some-registry>/k8s-timed-rolebinding:tag
-```
+- Kubernetes 1.19+ (required for webhook support and cert-manager integration)
+- kubectl 1.19+
+- cert-manager v1.14.3+ (for webhook certificates)
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
+## Installation
 
-**Install the CRDs into the cluster:**
+### Quick Install
 
-```sh
-make install
-```
+- Install [cert-manager](https://cert-manager.io/docs/installation/) (required for webhooks)
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
+- Install the operator
 
 ```sh
-make deploy IMG=<some-registry>/k8s-timed-rolebinding:tag
+kubectl apply -f https://raw.githubusercontent.com/hofman-tan/k8s-timed-rolebinding/main/dist/install.yaml
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+### Building from Source
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+If you want to build and deploy from source:
 
 ```sh
-kubectl apply -k config/samples/
+# Clone the repository
+git clone https://github.com/hofman-tan/k8s-timed-rolebinding.git
+cd k8s-timed-rolebinding
+
+# Build and push the operator image
+make docker-build docker-push IMG=<your-registry>/k8s-timed-rolebinding:<tag>
+
+# Generate the installation manifest
+make build-installer IMG=<your-registry>/k8s-timed-rolebinding:<tag>
+
+# Apply the manifest against your cluster.
+kubectl apply -f dist/install.yaml
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+## Usage
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+### TimedRoleBinding Example
 
-```sh
-kubectl delete -k config/samples/
+Create a time-bound RoleBinding that grants permissions for a specific time window:
+
+```yaml
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedRoleBinding
+metadata:
+  name: timedrolebinding-sample
+spec:
+  subjects:
+    - kind: User
+      name: user1
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: Role
+    name: role1
+    apiGroup: rbac.authorization.k8s.io
+  startTime: 2025-01-01T06:00:00Z
+  endTime: 2025-01-01T09:00:00Z
+  keepExpiredFor: 1h
+  postActivate:
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: post-activate-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_ROLE_BINDING_NAME has been activated"]
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
+#### Field Descriptions
 
-```sh
-make uninstall
+| Field                 | Required | Description                                                                                                       |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `spec.subjects`       | Yes      | List of users, groups, or service accounts to grant permissions to. Uses standard Kubernetes RBAC subject format. |
+| `spec.roleRef`        | Yes      | Reference to the Role that defines the permissions to grant. Must specify `kind` (Role), `name`, and `apiGroup`.  |
+| `spec.startTime`      | Yes      | RFC3339 timestamp when the RoleBinding should be created and permissions granted.                                 |
+| `spec.endTime`        | Yes      | RFC3339 timestamp when the RoleBinding should be deleted and permissions revoked. Must be after `startTime`.      |
+| `spec.keepExpiredFor` | No       | Duration to keep the TimedRoleBinding resource after expiration (e.g., "1h", "24h", "7d"). Defaults to "24h".     |
+| `spec.postActivate`   | No       | Job template to run after the RoleBinding is created. Useful for notifications or setup tasks.                    |
+| `spec.postExpire`     | No       | Job template to run after the RoleBinding is deleted. Useful for cleanup or notification tasks.                   |
+
+### TimedClusterRoleBinding Example
+
+Create a time-bound ClusterRoleBinding:
+
+```yaml
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedClusterRoleBinding
+metadata:
+  name: timedclusterrolebinding-sample
+spec:
+  subjects:
+    - kind: User
+      name: user1
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: ClusterRole
+    name: clusterrole1
+    apiGroup: rbac.authorization.k8s.io
+  startTime: 2025-01-01T06:00:00Z
+  endTime: 2025-01-01T09:00:00Z
+  keepExpiredFor: 1h
+  postActivate:
+    jobTemplate:
+      metadata:
+        namespace: default # namespace is required to tell the operator where to create the job in
+      spec:
+        template:
+          spec:
+            containers:
+              - name: post-activate-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args:
+                  ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has been activated"]
 ```
 
-**UnDeploy the controller from the cluster:**
+#### Field Descriptions
 
-```sh
-make undeploy
-```
+| Field                 | Required | Description                                                                                                                    |
+| --------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `spec.subjects`       | Yes      | List of users, groups, or service accounts to grant permissions to. Uses standard Kubernetes RBAC subject format.              |
+| `spec.roleRef`        | Yes      | Reference to the ClusterRole that defines the permissions to grant. Must specify `kind` (ClusterRole), `name`, and `apiGroup`. |
+| `spec.startTime`      | Yes      | RFC3339 timestamp when the ClusterRoleBinding should be created and permissions granted.                                       |
+| `spec.endTime`        | Yes      | RFC3339 timestamp when the ClusterRoleBinding should be deleted and permissions revoked. Must be after `startTime`.            |
+| `spec.keepExpiredFor` | No       | Duration to keep the TimedClusterRoleBinding resource after expiration (e.g., "1h", "24h", "7d"). Defaults to "24h".           |
+| `spec.postActivate`   | No       | Job template to run after the ClusterRoleBinding is created. Must specify `metadata.namespace` for job creation.               |
+| `spec.postExpire`     | No       | Job template to run after the ClusterRoleBinding is deleted. Must specify `metadata.namespace` for job creation.               |
 
-## Project Distribution
+## Resource Lifecycle
 
-Following the options to release and provide this solution to the users.
+The lifecycle of TimedRoleBinding and TimedClusterRoleBinding resources follows this sequence:
 
-### By providing a bundle with all YAML files
+1. Pending Phase
 
-1. Build the installer for the image built and published in the registry:
+   - The resource remains in Pending phase until `startTime`.
+   - At `startTime`, the operator transitions the resource to Active phase.
 
-```sh
-make build-installer IMG=<some-registry>/k8s-timed-rolebinding:tag
-```
+2. Active Phase
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
+   - The RoleBinding/ClusterRoleBinding is created and remains active between `startTime` and `endTime`, enforcing RBAC permission.
+   - If configured, `postActivate` job executes after binding creation.
+   - At `endTime`, the operator transitions the resource to Expired phase.
 
-2. Using the installer
+3. Expired Phase
 
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/k8s-timed-rolebinding/<tag or branch>/dist/install.yaml
-```
-
-### By providing a Helm Chart
-
-1. Build the chart using the optional helm plugin
-
-```sh
-kubebuilder edit --plugins=helm/v1-alpha
-```
-
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
-
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
-**NOTE:** Run `make help` for more information on all potential `make` targets
-
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
-
-## License
-
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+   - The operator removes the RoleBinding/ClusterRoleBinding.
+   - If configured, `postExpire` job executes after binding removal.
+   - The resource is retained for `keepExpiredFor` duration before removal.
