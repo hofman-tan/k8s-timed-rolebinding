@@ -363,7 +363,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("waiting until startTime is reached")
 			diff := time.Until(startTime)
-			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
 			time.Sleep(diff)
 
 			By("validating that the TimedRoleBinding is in the Active phase")
@@ -413,7 +413,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("waiting until endTime is reached")
 			diff = time.Until(endTime)
-			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
 			time.Sleep(diff)
 
 			By("validating that the TimedRoleBinding is in the Expired phase")
@@ -445,7 +445,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("waiting until keepExpiredFor is reached")
 			diff = time.Until(endTime.Add(keepExpiredFor))
-			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
 			time.Sleep(diff)
 
 			By("validating that the TimedRoleBinding is deleted")

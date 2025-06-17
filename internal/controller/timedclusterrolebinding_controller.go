@@ -80,7 +80,9 @@ func (r *TimedClusterRoleBindingReconciler) CreateRoleBinding(ctx context.Contex
 		Subjects: trb.Spec.Subjects,
 		RoleRef:  trb.Spec.RoleRef,
 	}
-	controllerutil.SetControllerReference(trb, roleBinding, r.Scheme)
+	if err := controllerutil.SetControllerReference(trb, roleBinding, r.Scheme); err != nil {
+		return err
+	}
 
 	if err := r.Create(ctx, roleBinding); client.IgnoreAlreadyExists(err) != nil {
 		return err
@@ -115,7 +117,9 @@ func (r *TimedClusterRoleBindingReconciler) CreateHookJob(ctx context.Context, t
 			Value: trb.GetName(),
 		})
 	}
-	controllerutil.SetControllerReference(trb, job, r.Scheme)
+	if err := controllerutil.SetControllerReference(trb, job, r.Scheme); err != nil {
+		return err
+	}
 
 	if err := r.Create(ctx, job); client.IgnoreAlreadyExists(err) != nil {
 		return err
