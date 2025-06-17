@@ -17,11 +17,13 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"text/template"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -136,6 +138,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 	SetDefaultEventuallyTimeout(2 * time.Minute)
 	SetDefaultEventuallyPollingInterval(time.Second)
+	SetDefaultConsistentlyPollingInterval(time.Second)
 
 	Context("Manager", func() {
 		It("should run successfully", func() {
@@ -294,6 +297,167 @@ var _ = Describe("Manager", Ordered, func() {
 			Eventually(verifyCAInjection).Should(Succeed())
 		})
 
+		It("should create and delete RoleBinding when the TimedRoleBinding is activated and expired", func() {
+			const (
+				EventuallyTimeout   = time.Second * 20
+				ConsistentlyTimeout = time.Second * 10
+			)
+
+			By("creating a TimedRoleBinding")
+			trbName := "timedrolebinding-sample"
+			subjectName := "user1"
+			roleName := "role1"
+			startTime := time.Now().UTC().Add(time.Minute)
+			endTime := startTime.Add(time.Minute)
+			keepExpiredFor := time.Minute
+
+			data := TimedRoleBindingManifest{
+				Name:           trbName,
+				Namespace:      namespace,
+				SubjectName:    subjectName,
+				RoleName:       roleName,
+				StartTime:      startTime.Format(time.RFC3339), // UTC time
+				EndTime:        endTime.Format(time.RFC3339),   // UTC time
+				KeepExpiredFor: keepExpiredFor.String(),
+			}
+
+			manifestFile, err := createTimedRoleBindingManifest(data)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create TimedRoleBinding")
+
+			cmd := exec.Command("kubectl", "create", "-f", manifestFile)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred(), "Failed to create TimedRoleBinding")
+
+			By("waiting for the TimedRoleBinding to be created")
+			verifyFunc := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal(trbName))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that the TimedRoleBinding is in the Pending phase")
+			cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+			output, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(output).To(Equal("Pending"))
+
+			By("validating that RoleBinding is not created yet")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("not found"))
+			}
+			Consistently(verifyFunc, ConsistentlyTimeout).Should(Succeed())
+
+			By("validating that the post-activate job is not created")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-activate", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("not found"))
+			}
+			Consistently(verifyFunc, ConsistentlyTimeout).Should(Succeed())
+
+			By("waiting until startTime is reached")
+			diff := time.Until(startTime)
+			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			time.Sleep(diff)
+
+			By("validating that the TimedRoleBinding is in the Active phase")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Active"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that a RoleBinding is created with the same name as the TimedRoleBinding")
+			verifyFunc = func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal(trbName))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that the RoleBinding has the same subjects as the TimedRoleBinding")
+			cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.subjects}")
+			output, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(output).To(ContainSubstring(subjectName))
+
+			By("validating that the RoleBinding has the same roleRef as the TimedRoleBinding")
+			cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.roleRef}")
+			output, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(output).To(ContainSubstring(roleName))
+
+			By("validating that the post-activate job is created")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-activate", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal(trbName + "-post-activate"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that the post-expire job is not created")
+			cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-expire", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+			output, err = utils.Run(cmd)
+			Expect(err).To(HaveOccurred())
+			Expect(output).To(ContainSubstring("not found"))
+
+			By("waiting until endTime is reached")
+			diff = time.Until(endTime)
+			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			time.Sleep(diff)
+
+			By("validating that the TimedRoleBinding is in the Expired phase")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Expired"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that the post-expire job is created")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-expire", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal(trbName + "-post-expire"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("validating that the RoleBinding is deleted")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("not found"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+
+			By("waiting until keepExpiredFor is reached")
+			diff = time.Until(endTime.Add(keepExpiredFor))
+			fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
+			time.Sleep(diff)
+
+			By("validating that the TimedRoleBinding is deleted")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace)
+				output, err = utils.Run(cmd)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("not found"))
+			}
+			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+		})
+
 		// +kubebuilder:scaffold:e2e-webhooks-checks
 
 		// TODO: Customize the e2e test suite with scenarios specific to your project.
@@ -364,4 +528,76 @@ type tokenRequest struct {
 	Status struct {
 		Token string `json:"token"`
 	} `json:"status"`
+}
+
+// TimedRoleBindingManifest represents the data needed to create a TimedRoleBinding manifest
+type TimedRoleBindingManifest struct {
+	Name           string
+	Namespace      string
+	SubjectName    string
+	RoleName       string
+	StartTime      string
+	EndTime        string
+	KeepExpiredFor string
+}
+
+func createTimedRoleBindingManifest(data TimedRoleBindingManifest) (string, error) {
+	const manifestTemplate = `
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedRoleBinding
+metadata:
+  name: {{ .Name }}
+  namespace: {{ .Namespace }}
+spec:
+  subjects:
+    - kind: User
+      name: {{ .SubjectName }}
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: Role
+    name: {{ .RoleName }}
+    apiGroup: rbac.authorization.k8s.io
+  startTime: {{ .StartTime }}
+  endTime: {{ .EndTime }}
+  keepExpiredFor: {{ .KeepExpiredFor }}
+  postActivate:
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: post-activate-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_ROLE_BINDING_NAME has been activated"]
+  postExpire:
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: post-expire-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_ROLE_BINDING_NAME has expired"]
+`
+
+	tmpl, err := template.New("manifest").Parse(manifestTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	manifestFile := filepath.Join("/tmp", "timedrolebinding.yaml")
+	if err := os.WriteFile(manifestFile, buf.Bytes(), os.FileMode(0o644)); err != nil {
+		return "", fmt.Errorf("failed to write manifest file: %w", err)
+	}
+
+	return manifestFile, nil
 }

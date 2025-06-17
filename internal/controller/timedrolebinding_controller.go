@@ -124,8 +124,8 @@ func (r *TimedRoleBindingReconciler) GetObjectNamespace(trb *rbacv1alpha1.TimedR
 	return trb.GetNamespace()
 }
 
-func (r *TimedRoleBindingReconciler) GetObjectSpec(trb *rbacv1alpha1.TimedRoleBinding) rbacv1alpha1.TimedRoleBindingSpec {
-	return trb.Spec
+func (r *TimedRoleBindingReconciler) GetObjectSpec(trb *rbacv1alpha1.TimedRoleBinding) *rbacv1alpha1.TimedRoleBindingSpec {
+	return &trb.Spec
 }
 
 func (r *TimedRoleBindingReconciler) GetObjectStatus(trb *rbacv1alpha1.TimedRoleBinding) *rbacv1alpha1.TimedRoleBindingStatus {

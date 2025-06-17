@@ -21,7 +21,7 @@ type Reconciler[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	CreateHookJob(ctx context.Context, trb *T, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error
 	GetObjectName(trb *T) string
 	GetObjectNamespace(trb *T) string
-	GetObjectSpec(trb *T) rbacv1alpha1.TimedRoleBindingSpec
+	GetObjectSpec(trb *T) *rbacv1alpha1.TimedRoleBindingSpec
 	GetObjectStatus(trb *T) *rbacv1alpha1.TimedRoleBindingStatus
 	SetObjectStatus(trb *T, phase rbacv1alpha1.TimedRoleBindingPhase, msg string)
 	UpdateObjectStatus(ctx context.Context, trb *T) error
@@ -96,7 +96,7 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 		}
 
 		// Create the postActivate job (if specified)
-		if isPostActivateJobEnabled(&spec) {
+		if isPostActivateJobEnabled(spec) {
 			log.Info("Creating postActivate job")
 			if err := r.CreateHookJob(
 				ctx,
@@ -142,7 +142,7 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	}
 
 	// Create the postExpire job (if specified)
-	if isPostExpireJobEnabled(&spec) {
+	if isPostExpireJobEnabled(spec) {
 		log.Info("Creating postExpire job")
 		if err := r.CreateHookJob(
 			ctx,
