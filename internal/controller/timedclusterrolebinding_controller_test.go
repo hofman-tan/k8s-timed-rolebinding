@@ -66,6 +66,7 @@ var _ = Describe("TimedClusterRoleBinding Controller", func() {
 			By("Cleanup the specific resource instance TimedClusterRoleBinding")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TimedClusterRoleBindingReconciler{

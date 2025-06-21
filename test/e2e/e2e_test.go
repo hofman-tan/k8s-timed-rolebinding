@@ -361,6 +361,7 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Consistently(verifyFunc, ConsistentlyTimeout).Should(Succeed())
 
+			// TODO: use Consistently to probe until startTime
 			By("waiting until startTime is reached")
 			diff := time.Until(startTime)
 			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
