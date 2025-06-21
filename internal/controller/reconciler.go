@@ -3,7 +3,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	rbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1"
@@ -102,48 +101,46 @@ func (r *Reconciler) reconcileObject(
 		setStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhaseActive,
-			fmt.Sprintf("%s is active", trb.GetName()),
+			fmt.Sprintf("%s is activated", trb.GetName()),
 		)
-
-		errs := []string{}
 
 		// Create the RoleBinding
 		rb := trb.BuildObjectForRoleBinding()
 		if err := controllerutil.SetControllerReference(trb, rb, r.Scheme); err != nil {
 			log.Error(err, "Failed to set controller reference")
-			errs = append(errs, fmt.Sprintf("Failed to set controller reference: %v", err))
-		}
-		if err := r.Create(ctx, rb); client.IgnoreAlreadyExists(err) != nil {
-			log.Error(err, fmt.Sprintf("Failed to create %s", rb.GetName()))
-			errs = append(errs, fmt.Sprintf("Failed to create %s: %v", rb.GetName(), err))
-		}
-
-		// Create the postActivate job (if specified)
-		if isPostActivateJobEnabled(spec) {
-			log.Info("Creating postActivate job")
-			// TODO: user-specified name for the job
-			job := trb.BuildJobObject(trb.GetName()+"-post-activate", spec.PostActivate.JobTemplate.DeepCopy())
-			if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
-				log.Error(err, "Failed to set controller reference")
-				errs = append(errs, fmt.Sprintf("Failed to set controller reference: %v", err))
-			}
-			if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
-				log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
-				errs = append(errs, fmt.Sprintf("Failed to create %s: %v", job.GetName(), err))
-			}
-		}
-
-		if len(errs) > 0 {
 			setStatus(
 				trb,
 				rbacv1alpha1.TimedRoleBindingPhaseFailed,
-				fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+				fmt.Sprintf("Failed to set controller reference: %v", err),
+			)
+		}
+		if err := r.Create(ctx, rb); client.IgnoreAlreadyExists(err) != nil {
+			log.Error(err, fmt.Sprintf("Failed to create %s", rb.GetName()))
+			setStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseFailed,
+				fmt.Sprintf("Failed to create %s: %v", rb.GetName(), err),
 			)
 		}
 
 		if err := r.Status().Update(ctx, trb); err != nil {
 			log.Error(err, fmt.Sprintf("Failed to update %s status", trb.GetName()))
 			return ctrl.Result{}, err
+		}
+
+		// Create the postActivate job (if configured)
+		if isPostActivateJobEnabled(spec) {
+			log.Info("Creating postActivate job")
+			// TODO: user-specified name for the job
+			job := trb.BuildJobObject(trb.GetName()+"-post-activate", spec.PostActivate.JobTemplate.DeepCopy())
+			if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
+				log.Error(err, "Failed to set controller reference")
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
+				log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
+				return ctrl.Result{}, err
+			}
 		}
 
 		// Requeue for expiration
@@ -157,39 +154,33 @@ func (r *Reconciler) reconcileObject(
 		fmt.Sprintf("%s has expired", trb.GetName()),
 	)
 
-	errs := []string{}
-
-	// Make sure role binding is deleted
+	// Make sure the role binding is deleted
 	if err := r.Delete(ctx, trb.BuildObjectForRoleBinding()); client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Failed to delete RoleBinding")
-		errs = append(errs, fmt.Sprintf("Failed to delete RoleBinding: %v", err))
-	}
-
-	// Create the postExpire job (if specified)
-	if isPostExpireJobEnabled(spec) {
-		log.Info("Creating postExpire job")
-		job := trb.BuildJobObject(trb.GetName()+"-post-expire", spec.PostExpire.JobTemplate.DeepCopy())
-		if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
-			log.Error(err, "Failed to set controller reference")
-			errs = append(errs, fmt.Sprintf("Failed to set controller reference: %v", err))
-		}
-		if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
-			log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
-			errs = append(errs, fmt.Sprintf("Failed to create %s: %v", job.GetName(), err))
-		}
-	}
-
-	if len(errs) > 0 {
 		setStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhaseFailed,
-			fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+			fmt.Sprintf("Failed to delete RoleBinding: %v", err),
 		)
 	}
 
 	if err := r.Status().Update(ctx, trb); err != nil {
 		log.Error(err, fmt.Sprintf("Failed to update %s status", trb.GetName()))
 		return ctrl.Result{}, err
+	}
+
+	// Create the postExpire job (if configured)
+	if isPostExpireJobEnabled(spec) {
+		log.Info("Creating postExpire job")
+		job := trb.BuildJobObject(trb.GetName()+"-post-expire", spec.PostExpire.JobTemplate.DeepCopy())
+		if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
+			log.Error(err, "Failed to set controller reference")
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
+			log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
+			return ctrl.Result{}, err
+		}
 	}
 
 	if spec.KeepExpiredFor != nil {

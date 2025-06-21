@@ -51,7 +51,27 @@ kubectl apply -f dist/install.yaml
 
 ### TimedRoleBinding Example
 
-Create a time-bound RoleBinding that grants permissions for a specific time window:
+Basic example that binds `user1` to `role1` for the duration from `startTime` until `endTime`.
+
+```yaml
+apiVersion: rbac.hhh.github.io/v1alpha1
+kind: TimedRoleBinding
+metadata:
+  name: timedrolebinding-sample
+spec:
+  subjects:
+    - kind: User
+      name: user1
+      apiGroup: rbac.authorization.k8s.io
+  roleRef:
+    kind: Role
+    name: role1
+    apiGroup: rbac.authorization.k8s.io
+  startTime: 2025-01-01T06:00:00Z
+  endTime: 2025-01-01T09:00:00Z
+```
+
+Example with `postActivate` job hook. Job hooks are job resources automatically created by the controller after its TimedRoleBinding resource becomes activated. The name of the resource can be obtained by referencing the environment variable `TIMED_ROLE_BINDING_NAME` injected into every container of the job.
 
 ```yaml
 apiVersion: rbac.hhh.github.io/v1alpha1
@@ -75,11 +95,23 @@ spec:
       spec:
         template:
           spec:
+            restartPolicy: Never
             containers:
               - name: post-activate-job
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args: ["echo $TIMED_ROLE_BINDING_NAME has been activated"]
+  postExpire:
+    jobTemplate:
+      spec:
+        template:
+          spec:
+            restartPolicy: Never
+            containers:
+              - name: post-expire-job
+                image: busybox
+                command: ["/bin/sh", "-c"]
+                args: ["echo $TIMED_ROLE_BINDING_NAME has expired"]
 ```
 
 #### Field Descriptions
@@ -96,7 +128,7 @@ spec:
 
 ### TimedClusterRoleBinding Example
 
-Create a time-bound ClusterRoleBinding:
+Aside from `kind` and the cluster role passed to `.spec.roleRef`, the rest of the specifications are identical to `TimedRoleBinding`. The environment variable `TIMED_CLUSTER_ROLE_BINDING_NAME` stores the name of the TimedClusterRoleBinding that creates the job.
 
 ```yaml
 apiVersion: rbac.hhh.github.io/v1alpha1
@@ -122,6 +154,7 @@ spec:
       spec:
         template:
           spec:
+            restartPolicy: Never
             containers:
               - name: post-activate-job
                 image: busybox
