@@ -17,11 +17,54 @@ limitations under the License.
 package v1alpha1
 
 import (
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+func (trb *TimedClusterRoleBinding) GetSpec() *TimedRoleBindingSpec {
+	return &trb.Spec
+}
+
+func (trb *TimedClusterRoleBinding) GetStatus() *TimedRoleBindingStatus {
+	return &trb.Status
+}
+
+func (trb *TimedClusterRoleBinding) BuildObjectForRoleBinding() client.Object {
+
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: trb.GetName(),
+		},
+		Subjects: trb.Spec.Subjects,
+		RoleRef:  trb.Spec.RoleRef,
+	}
+}
+
+func (trb *TimedClusterRoleBinding) BuildJobObject(name string, jobTemplateSpec *batchv1.JobTemplateSpec) batchv1.Job {
+	job := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: jobTemplateSpec.GetNamespace(), // job must have a namespace
+		},
+		Spec: jobTemplateSpec.Spec,
+	}
+
+	// Inject object name as an environment variable into the containers
+	for i := range job.Spec.Template.Spec.Containers {
+		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
+			Name:  "TIMED_CLUSTER_ROLE_BINDING_NAME",
+			Value: trb.GetName(),
+		})
+	}
+
+	return job
+}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

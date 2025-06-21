@@ -146,7 +146,7 @@ var _ = Describe("TimedRoleBinding Controller", func() {
 					StartTime: startTime,
 					EndTime:   endTime,
 					PostActivate: &rbacv1alpha1.PostActivate{
-						JobTemplate: &rbacv1alpha1.JobTemplateSpec{
+						JobTemplate: &batchv1.JobTemplateSpec{
 							Spec: batchv1.JobSpec{
 								Template: corev1.PodTemplateSpec{
 									Spec: corev1.PodSpec{
@@ -230,7 +230,7 @@ var _ = Describe("TimedRoleBinding Controller", func() {
 					EndTime:        endTime,
 					KeepExpiredFor: keepExpiredFor,
 					PostExpire: &rbacv1alpha1.PostExpire{
-						JobTemplate: &rbacv1alpha1.JobTemplateSpec{
+						JobTemplate: &batchv1.JobTemplateSpec{
 							Spec: batchv1.JobSpec{
 								Template: corev1.PodTemplateSpec{
 									Spec: corev1.PodSpec{
