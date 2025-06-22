@@ -18,8 +18,10 @@ package v1alpha1
 
 import (
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type TimedRoleBindingPhase string
@@ -34,17 +36,51 @@ const (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type JobTemplateSpec struct {
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              batchv1.JobSpec `json:"spec"`
+func (trb *TimedRoleBinding) GetSpec() *TimedRoleBindingSpec {
+	return &trb.Spec
+}
+
+func (trb *TimedRoleBinding) GetStatus() *TimedRoleBindingStatus {
+	return &trb.Status
+}
+
+func (trb *TimedRoleBinding) BuildObjectForRoleBinding() client.Object {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      trb.GetName(),
+			Namespace: trb.GetNamespace(),
+		},
+		Subjects: trb.Spec.Subjects,
+		RoleRef:  trb.Spec.RoleRef,
+	}
+}
+
+func (trb *TimedRoleBinding) BuildJobObject(name string, jobTemplateSpec *batchv1.JobTemplateSpec) batchv1.Job {
+	job := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: trb.GetNamespace(), // always in the same namespace as the CR
+		},
+		Spec: jobTemplateSpec.Spec,
+	}
+
+	// Inject object name as an environment variable into the containers
+	for i := range job.Spec.Template.Spec.Containers {
+		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
+			Name:  "TIMED_ROLE_BINDING_NAME",
+			Value: trb.GetName(),
+		})
+	}
+
+	return job
 }
 
 type PostActivate struct {
-	JobTemplate *JobTemplateSpec `json:"jobTemplate,omitempty"`
+	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
 }
 
 type PostExpire struct {
-	JobTemplate *JobTemplateSpec `json:"jobTemplate,omitempty"`
+	JobTemplate *batchv1.JobTemplateSpec `json:"jobTemplate,omitempty"`
 }
 
 // TimedRoleBindingSpec defines the desired state of TimedRoleBinding.

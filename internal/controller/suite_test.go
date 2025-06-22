@@ -98,15 +98,18 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&TimedRoleBindingReconciler{
+	reconciler := Reconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
+	}
+
+	err = (&TimedRoleBindingReconciler{
+		Reconciler: reconciler,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&TimedClusterRoleBindingReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Reconciler: reconciler,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

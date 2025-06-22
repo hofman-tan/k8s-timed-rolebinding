@@ -3,78 +3,94 @@ package controller
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	rbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// Reconciler is an interface for the reconciler that handles both TimedRoleBinding and TimedClusterRoleBinding
-type Reconciler[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleBinding] interface {
-	GetObject(ctx context.Context, req ctrl.Request) (*T, error)
-	DeleteObject(ctx context.Context, trb *T) error
-	CreateRoleBinding(ctx context.Context, trb *T) error
-	DeleteRoleBinding(ctx context.Context, trb *T) error
-	CreateHookJob(ctx context.Context, trb *T, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error
-	GetObjectName(trb *T) string
-	GetObjectNamespace(trb *T) string
-	GetObjectSpec(trb *T) *rbacv1alpha1.TimedRoleBindingSpec
-	GetObjectStatus(trb *T) *rbacv1alpha1.TimedRoleBindingStatus
-	SetObjectStatus(trb *T, phase rbacv1alpha1.TimedRoleBindingPhase, msg string)
-	UpdateObjectStatus(ctx context.Context, trb *T) error
+type TimedRoleBindingObject interface {
+	client.Object
+	GetSpec() *rbacv1alpha1.TimedRoleBindingSpec
+	GetStatus() *rbacv1alpha1.TimedRoleBindingStatus
+	BuildObjectForRoleBinding() client.Object
+	BuildJobObject(name string, jobTemplateSpec *batchv1.JobTemplateSpec) batchv1.Job
 }
 
-func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleBinding](
+func setStatus(
+	trb TimedRoleBindingObject,
+	phase rbacv1alpha1.TimedRoleBindingPhase,
+	msg string,
+) {
+	trb.GetStatus().Phase = phase
+	trb.GetStatus().Message = msg
+	trb.GetStatus().LastTransitionTime = metav1.Now()
+}
+
+type Reconciler struct {
+	client.Client
+	Scheme *runtime.Scheme
+}
+
+func (r *Reconciler) reconcileObject(
 	ctx context.Context,
 	req ctrl.Request,
-	r Reconciler[T],
-	name string,
+	trb TimedRoleBindingObject,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	trb, err := r.GetObject(ctx, req)
-	if err != nil {
+	if err := r.Get(ctx, req.NamespacedName, trb); err != nil {
 		if errors.IsNotFound(err) {
 			// TimedRoleBinding not found. No need to requeue.
-			log.Info(fmt.Sprintf("%s not found. Ignoring since it must have been deleted", name))
+			log.Info(fmt.Sprintf("%s not found. Ignoring since it must have been deleted", trb.GetName()))
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, fmt.Sprintf("Failed to get %s", name))
+		log.Error(err, fmt.Sprintf("Failed to get %s", trb.GetName()))
 		return ctrl.Result{}, err
 	}
 
-	spec := r.GetObjectSpec(trb)
+	log.Info(fmt.Sprintf("Reconciling %s", trb.GetName()), "namespace", trb.GetNamespace())
+
+	spec := trb.GetSpec()
 	now := time.Now()
 	startTime := spec.StartTime.Time
 	endTime := spec.EndTime.Time
 
 	// Pending activation
 	if startTime.After(now) {
-		r.SetObjectStatus(
+		setStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhasePending,
-			fmt.Sprintf("%s is queued for activation", name),
+			fmt.Sprintf("%s is queued for activation", trb.GetName()),
 		)
 
 		// Make sure the associated RoleBinding is deleted
-		if err := r.DeleteRoleBinding(ctx, trb); err != nil {
+		if err := r.Delete(ctx, trb.BuildObjectForRoleBinding()); client.IgnoreNotFound(err) != nil {
 			log.Error(err, "Failed to delete RoleBinding")
-			r.SetObjectStatus(
+			setStatus(
 				trb,
 				rbacv1alpha1.TimedRoleBindingPhaseFailed,
 				fmt.Sprintf("Failed to delete RoleBinding: %v", err),
 			)
 		}
 
-		if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-			log.Error(err, fmt.Sprintf("Failed to update %s status", name))
+		if err := r.Status().Update(ctx, trb); err != nil {
+			log.Error(err, fmt.Sprintf("Failed to update %s status", trb.GetName()))
 			return ctrl.Result{}, err
 		}
 
-		log.Info(fmt.Sprintf("%s is queued for activation", name), "name", r.GetObjectName(trb), "namespace", r.GetObjectNamespace(trb))
+		log.Info(
+			fmt.Sprintf("%s is queued for activation", trb.GetName()),
+			"name", trb.GetName(),
+			"namespace", trb.GetNamespace(),
+		)
 
 		// Requeue for activation
 		return ctrl.Result{RequeueAfter: startTime.Sub(now)}, nil
@@ -82,44 +98,49 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 
 	// Active
 	if !startTime.After(now) && endTime.After(now) {
-		r.SetObjectStatus(
+		setStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhaseActive,
-			fmt.Sprintf("%s is active", name),
+			fmt.Sprintf("%s is activated", trb.GetName()),
 		)
 
-		errs := []string{}
-
-		if err := r.CreateRoleBinding(ctx, trb); err != nil {
-			log.Error(err, "Failed to create RoleBinding")
-			errs = append(errs, fmt.Sprintf("Failed to create RoleBinding: %v", err))
-		}
-
-		// Create the postActivate job (if specified)
-		if isPostActivateJobEnabled(spec) {
-			log.Info("Creating postActivate job")
-			if err := r.CreateHookJob(
-				ctx,
-				trb,
-				r.GetObjectName(trb)+"-post-activate",
-				*spec.PostActivate.JobTemplate.DeepCopy(),
-			); err != nil {
-				log.Error(err, "Failed to create postActivate job")
-				errs = append(errs, fmt.Sprintf("Failed to create postActivate job: %v", err))
-			}
-		}
-
-		if len(errs) > 0 {
-			r.SetObjectStatus(
+		// Create the RoleBinding
+		rb := trb.BuildObjectForRoleBinding()
+		if err := controllerutil.SetControllerReference(trb, rb, r.Scheme); err != nil {
+			log.Error(err, "Failed to set controller reference")
+			setStatus(
 				trb,
 				rbacv1alpha1.TimedRoleBindingPhaseFailed,
-				fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+				fmt.Sprintf("Failed to set controller reference: %v", err),
+			)
+		}
+		if err := r.Create(ctx, rb); client.IgnoreAlreadyExists(err) != nil {
+			log.Error(err, fmt.Sprintf("Failed to create %s", rb.GetName()))
+			setStatus(
+				trb,
+				rbacv1alpha1.TimedRoleBindingPhaseFailed,
+				fmt.Sprintf("Failed to create %s: %v", rb.GetName(), err),
 			)
 		}
 
-		if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-			log.Error(err, fmt.Sprintf("Failed to update %s status", name))
+		if err := r.Status().Update(ctx, trb); err != nil {
+			log.Error(err, fmt.Sprintf("Failed to update %s status", trb.GetName()))
 			return ctrl.Result{}, err
+		}
+
+		// Create the postActivate job (if configured)
+		if isPostActivateJobEnabled(spec) {
+			log.Info("Creating postActivate job")
+			// TODO: user-specified name for the job
+			job := trb.BuildJobObject(trb.GetName()+"-post-activate", spec.PostActivate.JobTemplate.DeepCopy())
+			if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
+				log.Error(err, "Failed to set controller reference")
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
+				log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
+				return ctrl.Result{}, err
+			}
 		}
 
 		// Requeue for expiration
@@ -127,45 +148,39 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	}
 
 	// Expired
-	r.SetObjectStatus(
+	setStatus(
 		trb,
 		rbacv1alpha1.TimedRoleBindingPhaseExpired,
-		fmt.Sprintf("%s has expired", name),
+		fmt.Sprintf("%s has expired", trb.GetName()),
 	)
 
-	errs := []string{}
-
-	// Make sure role binding is deleted
-	if err := r.DeleteRoleBinding(ctx, trb); err != nil {
+	// Make sure the role binding is deleted
+	if err := r.Delete(ctx, trb.BuildObjectForRoleBinding()); client.IgnoreNotFound(err) != nil {
 		log.Error(err, "Failed to delete RoleBinding")
-		errs = append(errs, fmt.Sprintf("Failed to delete RoleBinding: %v", err))
-	}
-
-	// Create the postExpire job (if specified)
-	if isPostExpireJobEnabled(spec) {
-		log.Info("Creating postExpire job")
-		if err := r.CreateHookJob(
-			ctx,
-			trb,
-			r.GetObjectName(trb)+"-post-expire",
-			*spec.PostExpire.JobTemplate.DeepCopy(),
-		); err != nil {
-			log.Error(err, "Failed to create postExpire job")
-			errs = append(errs, fmt.Sprintf("Failed to create postExpire job: %v", err))
-		}
-	}
-
-	if len(errs) > 0 {
-		r.SetObjectStatus(
+		setStatus(
 			trb,
 			rbacv1alpha1.TimedRoleBindingPhaseFailed,
-			fmt.Sprintf("Failed to create RoleBinding: %s", strings.Join(errs, ". ")),
+			fmt.Sprintf("Failed to delete RoleBinding: %v", err),
 		)
 	}
 
-	if err := r.UpdateObjectStatus(ctx, trb); err != nil {
-		log.Error(err, fmt.Sprintf("Failed to update %s status", name))
+	if err := r.Status().Update(ctx, trb); err != nil {
+		log.Error(err, fmt.Sprintf("Failed to update %s status", trb.GetName()))
 		return ctrl.Result{}, err
+	}
+
+	// Create the postExpire job (if configured)
+	if isPostExpireJobEnabled(spec) {
+		log.Info("Creating postExpire job")
+		job := trb.BuildJobObject(trb.GetName()+"-post-expire", spec.PostExpire.JobTemplate.DeepCopy())
+		if err := controllerutil.SetControllerReference(trb, &job, r.Scheme); err != nil {
+			log.Error(err, "Failed to set controller reference")
+			return ctrl.Result{}, err
+		}
+		if err := r.Create(ctx, &job); client.IgnoreAlreadyExists(err) != nil {
+			log.Error(err, fmt.Sprintf("Failed to create %s", job.GetName()))
+			return ctrl.Result{}, err
+		}
 	}
 
 	if spec.KeepExpiredFor != nil {
@@ -178,8 +193,8 @@ func reconciles[T rbacv1alpha1.TimedRoleBinding | rbacv1alpha1.TimedClusterRoleB
 	}
 
 	// Remove the CR
-	if err := r.DeleteObject(ctx, trb); err != nil {
-		log.Error(err, fmt.Sprintf("Failed to delete %s", name))
+	if err := r.Delete(ctx, trb); err != nil {
+		log.Error(err, fmt.Sprintf("Failed to delete %s", trb.GetName()))
 		return ctrl.Result{}, err
 	}
 

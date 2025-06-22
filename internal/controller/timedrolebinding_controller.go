@@ -19,22 +19,14 @@ package controller
 import (
 	"context"
 
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
 	rbacv1alpha1 "github.com/hofman-tan/k8s-timed-rolebinding/api/v1alpha1"
+	rbacv1 "k8s.io/api/rbac/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // TimedRoleBindingReconciler reconciles a TimedRoleBinding object
 type TimedRoleBindingReconciler struct {
-	client.Client
-	Scheme *runtime.Scheme
+	Reconciler Reconciler
 }
 
 // +kubebuilder:rbac:groups=rbac.hhh.github.io,resources=timedrolebindings,verbs=get;list;watch;create;update;patch;delete
@@ -45,105 +37,7 @@ type TimedRoleBindingReconciler struct {
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *TimedRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconciles(ctx, req, r, "TimedRoleBinding")
-}
-
-func (r *TimedRoleBindingReconciler) GetObject(ctx context.Context, req ctrl.Request) (*rbacv1alpha1.TimedRoleBinding, error) {
-	trb := &rbacv1alpha1.TimedRoleBinding{}
-	if err := r.Get(ctx, req.NamespacedName, trb); err != nil {
-		return nil, err
-	}
-	return trb, nil
-}
-
-func (r *TimedRoleBindingReconciler) DeleteObject(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
-	if err := r.Delete(ctx, trb); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *TimedRoleBindingReconciler) CreateRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
-	roleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      trb.GetName(),
-			Namespace: trb.GetNamespace(),
-		},
-		Subjects: trb.Spec.Subjects,
-		RoleRef:  trb.Spec.RoleRef,
-	}
-	if err := controllerutil.SetControllerReference(trb, roleBinding, r.Scheme); err != nil {
-		return err
-	}
-
-	if err := r.Create(ctx, roleBinding); client.IgnoreAlreadyExists(err) != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *TimedRoleBindingReconciler) DeleteRoleBinding(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
-	if err := r.Delete(ctx, &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      trb.GetName(),
-			Namespace: trb.GetNamespace(),
-		},
-	}); client.IgnoreNotFound(err) != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *TimedRoleBindingReconciler) CreateHookJob(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding, name string, templateSpec rbacv1alpha1.JobTemplateSpec) error {
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: trb.GetNamespace(), // always in the same namespace as the CR
-		},
-		Spec: templateSpec.Spec,
-	}
-
-	// Inject the CR name as env variable into the containers.
-	for i := range job.Spec.Template.Spec.Containers {
-		job.Spec.Template.Spec.Containers[i].Env = append(job.Spec.Template.Spec.Containers[i].Env, corev1.EnvVar{
-			Name:  "TIMED_ROLE_BINDING_NAME",
-			Value: trb.GetName(),
-		})
-	}
-	if err := controllerutil.SetControllerReference(trb, job, r.Scheme); err != nil {
-		return err
-	}
-
-	if err := r.Create(ctx, job); client.IgnoreAlreadyExists(err) != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *TimedRoleBindingReconciler) GetObjectName(trb *rbacv1alpha1.TimedRoleBinding) string {
-	return trb.GetName()
-}
-
-func (r *TimedRoleBindingReconciler) GetObjectNamespace(trb *rbacv1alpha1.TimedRoleBinding) string {
-	return trb.GetNamespace()
-}
-
-func (r *TimedRoleBindingReconciler) GetObjectSpec(trb *rbacv1alpha1.TimedRoleBinding) *rbacv1alpha1.TimedRoleBindingSpec {
-	return &trb.Spec
-}
-
-func (r *TimedRoleBindingReconciler) GetObjectStatus(trb *rbacv1alpha1.TimedRoleBinding) *rbacv1alpha1.TimedRoleBindingStatus {
-	return &trb.Status
-}
-
-func (r *TimedRoleBindingReconciler) SetObjectStatus(trb *rbacv1alpha1.TimedRoleBinding, phase rbacv1alpha1.TimedRoleBindingPhase, msg string) {
-	trb.Status.Phase = phase
-	trb.Status.Message = msg
-}
-
-func (r *TimedRoleBindingReconciler) UpdateObjectStatus(ctx context.Context, trb *rbacv1alpha1.TimedRoleBinding) error {
-	trb.Status.LastTransitionTime = metav1.Now()
-	return r.Status().Update(ctx, trb)
+	return r.Reconciler.reconcileObject(ctx, req, &rbacv1alpha1.TimedRoleBinding{})
 }
 
 // SetupWithManager sets up the controller with the Manager.

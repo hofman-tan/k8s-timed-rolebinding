@@ -203,9 +203,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TimedRoleBindingReconciler{
+	reconciler := controller.Reconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+	}
+
+	if err = (&controller.TimedRoleBindingReconciler{
+		Reconciler: reconciler,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimedRoleBinding")
 		os.Exit(1)
@@ -218,8 +222,7 @@ func main() {
 		}
 	}
 	if err = (&controller.TimedClusterRoleBindingReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Reconciler: reconciler,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TimedClusterRoleBinding")
 		os.Exit(1)

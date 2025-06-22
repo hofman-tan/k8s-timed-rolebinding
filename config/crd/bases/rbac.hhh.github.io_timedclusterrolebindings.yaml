@@ -55,8 +55,13 @@ spec:
               postActivate:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         properties:
                           annotations:
                             additionalProperties:
@@ -76,8 +81,9 @@ spec:
                             type: string
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -8753,15 +8759,18 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               postExpire:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         properties:
                           annotations:
                             additionalProperties:
@@ -8781,8 +8790,9 @@ spec:
                             type: string
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -17458,8 +17468,6 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               roleRef:

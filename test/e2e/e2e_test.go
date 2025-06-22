@@ -337,40 +337,39 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
 
-			By("validating that the TimedRoleBinding is in the Pending phase")
-			cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
-			output, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(output).To(Equal("Pending"))
-
-			By("validating that RoleBinding is not created yet")
+			By("validating that the related objects are not created yet before startTime")
 			verifyFunc = func(g Gomega) {
+				// validating that the TimedRoleBinding is in the Pending phase
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(output).To(Equal("Pending"))
+
+				// validating that RoleBinding is not created yet
 				cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.metadata.name}")
-				output, err := utils.Run(cmd)
+				output, err = utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(output).To(ContainSubstring("not found"))
-			}
-			Consistently(verifyFunc, ConsistentlyTimeout).Should(Succeed())
 
-			By("validating that the post-activate job is not created")
-			verifyFunc = func(g Gomega) {
+				// validating that the post-activate job is not created
 				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-activate", "-n", namespace, "-o", "jsonpath={.metadata.name}")
-				output, err := utils.Run(cmd)
+				output, err = utils.Run(cmd)
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(output).To(ContainSubstring("not found"))
+
+				// validating that the post-expire job is not created
+				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-expire", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err = utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(output).To(ContainSubstring("not found"))
 			}
-			Consistently(verifyFunc, ConsistentlyTimeout).Should(Succeed())
+			// asserting until startTime is reached
+			Consistently(verifyFunc, time.Until(startTime)-1*time.Second).Should(Succeed())
 
-			// TODO: use Consistently to probe until startTime
-			By("waiting until startTime is reached")
-			diff := time.Until(startTime)
-			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
-			time.Sleep(diff)
-
-			By("validating that the TimedRoleBinding is in the Active phase")
+			By("validating that the TimedRoleBinding is in the Active phase once startTime is reached")
 			verifyFunc = func(g Gomega) {
 				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
-				output, err = utils.Run(cmd)
+				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
 				g.Expect(output).To(Equal("Active"))
 			}
@@ -387,7 +386,7 @@ var _ = Describe("Manager", Ordered, func() {
 
 			By("validating that the RoleBinding has the same subjects as the TimedRoleBinding")
 			cmd = exec.Command("kubectl", "get", "rolebindings", trbName, "-n", namespace, "-o", "jsonpath={.subjects}")
-			output, err = utils.Run(cmd)
+			output, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(output).To(ContainSubstring(subjectName))
 
@@ -406,18 +405,22 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
 
-			By("validating that the post-expire job is not created")
-			cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-expire", "-n", namespace, "-o", "jsonpath={.metadata.name}")
-			output, err = utils.Run(cmd)
-			Expect(err).To(HaveOccurred())
-			Expect(output).To(ContainSubstring("not found"))
+			By("validating that the post-expire job is not created before endTime")
+			verifyFunc = func(g Gomega) {
+				cmd = exec.Command("kubectl", "get", "jobs", trbName+"-post-expire", "-n", namespace, "-o", "jsonpath={.metadata.name}")
+				output, err = utils.Run(cmd)
+				Expect(err).To(HaveOccurred())
+				Expect(output).To(ContainSubstring("not found"))
 
-			By("waiting until endTime is reached")
-			diff = time.Until(endTime)
-			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
-			time.Sleep(diff)
+				// sanity check: the Active phase should be maintained until endTime
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Active"))
+			}
+			Consistently(verifyFunc, time.Until(endTime)-1*time.Second).Should(Succeed())
 
-			By("validating that the TimedRoleBinding is in the Expired phase")
+			By("validating that the TimedRoleBinding is in the Expired phase once endTime is reached")
 			verifyFunc = func(g Gomega) {
 				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
 				output, err = utils.Run(cmd)
@@ -441,15 +444,16 @@ var _ = Describe("Manager", Ordered, func() {
 				output, err = utils.Run(cmd)
 				g.Expect(err).To(HaveOccurred())
 				g.Expect(output).To(ContainSubstring("not found"))
+
+				// sanity check: the Expired phase should be maintained until keepExpiredFor is reached
+				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace, "-o", "jsonpath={.status.phase}")
+				output, err = utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(output).To(Equal("Expired"))
 			}
-			Eventually(verifyFunc, EventuallyTimeout).Should(Succeed())
+			Consistently(verifyFunc, time.Until(endTime.Add(keepExpiredFor))-1*time.Second).Should(Succeed())
 
-			By("waiting until keepExpiredFor is reached")
-			diff = time.Until(endTime.Add(keepExpiredFor))
-			_, _ = fmt.Fprintf(GinkgoWriter, "Sleeping for %d seconds\n", int(diff.Seconds()))
-			time.Sleep(diff)
-
-			By("validating that the TimedRoleBinding is deleted")
+			By("validating that the TimedRoleBinding is deleted after keepExpiredFor is reached")
 			verifyFunc = func(g Gomega) {
 				cmd = exec.Command("kubectl", "get", "timedrolebindings", trbName, "-n", namespace)
 				output, err = utils.Run(cmd)
