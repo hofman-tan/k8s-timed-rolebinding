@@ -25,7 +25,7 @@ A Kubernetes operator that enables time-bound RBAC permissions through custom re
 - Install the operator
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/hofman-tan/k8s-timed-rolebinding/main/dist/install.yaml
+kubectl apply --server-side -f http://github.com/hofman-tan/k8s-timed-rolebinding/releases/download/v0.1.0/install.yaml
 ```
 
 ### Building from Source
