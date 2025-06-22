@@ -70,6 +70,23 @@ spec:
                         description: |-
                           Standard object's metadata of the jobs created from this template.
                           More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          finalizers:
+                            items:
+                              type: string
+                            type: array
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          name:
+                            type: string
+                          namespace:
+                            type: string
                         type: object
                       spec:
                         description: |-
@@ -447,6 +464,23 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  finalizers:
+                                    items:
+                                      type: string
+                                    type: array
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -7339,6 +7373,23 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
+                                                  properties:
+                                                    annotations:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    finalizers:
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                    labels:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    name:
+                                                      type: string
+                                                    namespace:
+                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -8728,6 +8779,23 @@ spec:
                         description: |-
                           Standard object's metadata of the jobs created from this template.
                           More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          finalizers:
+                            items:
+                              type: string
+                            type: array
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          name:
+                            type: string
+                          namespace:
+                            type: string
                         type: object
                       spec:
                         description: |-
@@ -9105,6 +9173,23 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  finalizers:
+                                    items:
+                                      type: string
+                                    type: array
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -15997,6 +16082,23 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
+                                                  properties:
+                                                    annotations:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    finalizers:
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                    labels:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    name:
+                                                      type: string
+                                                    namespace:
+                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -17517,6 +17619,23 @@ spec:
                         description: |-
                           Standard object's metadata of the jobs created from this template.
                           More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          finalizers:
+                            items:
+                              type: string
+                            type: array
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          name:
+                            type: string
+                          namespace:
+                            type: string
                         type: object
                       spec:
                         description: |-
@@ -17894,6 +18013,23 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  finalizers:
+                                    items:
+                                      type: string
+                                    type: array
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -24786,6 +24922,23 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
+                                                  properties:
+                                                    annotations:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    finalizers:
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                    labels:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    name:
+                                                      type: string
+                                                    namespace:
+                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -26175,6 +26328,23 @@ spec:
                         description: |-
                           Standard object's metadata of the jobs created from this template.
                           More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          finalizers:
+                            items:
+                              type: string
+                            type: array
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          name:
+                            type: string
+                          namespace:
+                            type: string
                         type: object
                       spec:
                         description: |-
@@ -26552,6 +26722,23 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+                                properties:
+                                  annotations:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  finalizers:
+                                    items:
+                                      type: string
+                                    type: array
+                                  labels:
+                                    additionalProperties:
+                                      type: string
+                                    type: object
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -33444,6 +33631,23 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
+                                                  properties:
+                                                    annotations:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    finalizers:
+                                                      items:
+                                                        type: string
+                                                      type: array
+                                                    labels:
+                                                      additionalProperties:
+                                                        type: string
+                                                      type: object
+                                                    name:
+                                                      type: string
+                                                    namespace:
+                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -35302,7 +35506,7 @@ spec:
         - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
         command:
         - /manager
-        image: ghcr.io/hofman-tan/k8s-timed-rolebinding-controller:latest
+        image: controller:latest
         imagePullPolicy: Never
         livenessProbe:
           httpGet:
