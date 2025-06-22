@@ -14,19 +14,19 @@ spec:
     kind: ClusterRole
     name: clusterrole1
     apiGroup: rbac.authorization.k8s.io
-  startTime: 2025-06-14T06:00:00Z
-  endTime: 2025-06-14T09:40:00Z
+  startTime: 2025-01-01T06:00:00Z
+  endTime: 2025-01-01T09:00:00Z
   keepExpiredFor: 1h
   postActivate:
     jobTemplate:
       metadata:
-        namespace: ns1 # namespace where this job will be created
+        namespace: default # namespace where this job will be created
       spec:
         template:
           spec:
             restartPolicy: Never
             containers:
-              - name: timedclusterrolebinding-sample
+              - name: post-activate
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args:
@@ -34,13 +34,13 @@ spec:
   postExpire:
     jobTemplate:
       metadata:
-        namespace: ns1 # namespace where this job will be created
+        namespace: default # namespace where this job will be created
       spec:
         template:
           spec:
             restartPolicy: Never
             containers:
-              - name: timedclusterrolebinding-sample
+              - name: post-expire
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args: ["echo $TIMED_CLUSTER_ROLE_BINDING_NAME has expired"]

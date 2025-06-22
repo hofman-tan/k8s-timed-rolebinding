@@ -63,29 +63,18 @@ spec:
               postActivate:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
-                        properties:
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          finalizers:
-                            items:
-                              type: string
-                            type: array
-                          labels:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          name:
-                            type: string
-                          namespace:
-                            type: string
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -458,23 +447,6 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -7367,23 +7339,6 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
-                                                  properties:
-                                                    annotations:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    finalizers:
-                                                      items:
-                                                        type: string
-                                                      type: array
-                                                    labels:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    name:
-                                                      type: string
-                                                    namespace:
-                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -8761,36 +8716,23 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               postExpire:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
-                        properties:
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          finalizers:
-                            items:
-                              type: string
-                            type: array
-                          labels:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          name:
-                            type: string
-                          namespace:
-                            type: string
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -9163,23 +9105,6 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -16072,23 +15997,6 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
-                                                  properties:
-                                                    annotations:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    finalizers:
-                                                      items:
-                                                        type: string
-                                                      type: array
-                                                    labels:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    name:
-                                                      type: string
-                                                    namespace:
-                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -17466,8 +17374,6 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               roleRef:
@@ -17604,29 +17510,18 @@ spec:
               postActivate:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
-                        properties:
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          finalizers:
-                            items:
-                              type: string
-                            type: array
-                          labels:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          name:
-                            type: string
-                          namespace:
-                            type: string
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -17999,23 +17894,6 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -24908,23 +24786,6 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
-                                                  properties:
-                                                    annotations:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    finalizers:
-                                                      items:
-                                                        type: string
-                                                      type: array
-                                                    labels:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    name:
-                                                      type: string
-                                                    namespace:
-                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -26302,36 +26163,23 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               postExpire:
                 properties:
                   jobTemplate:
+                    description: JobTemplateSpec describes the data a Job should have
+                      when created from a template
                     properties:
                       metadata:
-                        properties:
-                          annotations:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          finalizers:
-                            items:
-                              type: string
-                            type: array
-                          labels:
-                            additionalProperties:
-                              type: string
-                            type: object
-                          name:
-                            type: string
-                          namespace:
-                            type: string
+                        description: |-
+                          Standard object's metadata of the jobs created from this template.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
                         type: object
                       spec:
-                        description: JobSpec describes how the job execution will
-                          look like.
+                        description: |-
+                          Specification of the desired behavior of the job.
+                          More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status
                         properties:
                           activeDeadlineSeconds:
                             description: |-
@@ -26704,23 +26552,6 @@ spec:
                                 description: |-
                                   Standard object's metadata.
                                   More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
-                                properties:
-                                  annotations:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  finalizers:
-                                    items:
-                                      type: string
-                                    type: array
-                                  labels:
-                                    additionalProperties:
-                                      type: string
-                                    type: object
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
                                 type: object
                               spec:
                                 description: |-
@@ -33613,23 +33444,6 @@ spec:
                                                     May contain labels and annotations that will be copied into the PVC
                                                     when creating it. No other fields are allowed and will be rejected during
                                                     validation.
-                                                  properties:
-                                                    annotations:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    finalizers:
-                                                      items:
-                                                        type: string
-                                                      type: array
-                                                    labels:
-                                                      additionalProperties:
-                                                        type: string
-                                                      type: object
-                                                    name:
-                                                      type: string
-                                                    namespace:
-                                                      type: string
                                                   type: object
                                                 spec:
                                                   description: |-
@@ -35007,8 +34821,6 @@ spec:
                         required:
                         - template
                         type: object
-                    required:
-                    - spec
                     type: object
                 type: object
               roleRef:

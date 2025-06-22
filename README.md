@@ -97,7 +97,7 @@ spec:
           spec:
             restartPolicy: Never
             containers:
-              - name: post-activate-job
+              - name: post-activate
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args: ["echo $TIMED_ROLE_BINDING_NAME has been activated"]
@@ -108,7 +108,7 @@ spec:
           spec:
             restartPolicy: Never
             containers:
-              - name: post-expire-job
+              - name: post-expire
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args: ["echo $TIMED_ROLE_BINDING_NAME has expired"]
@@ -156,7 +156,7 @@ spec:
           spec:
             restartPolicy: Never
             containers:
-              - name: post-activate-job
+              - name: post-activate
                 image: busybox
                 command: ["/bin/sh", "-c"]
                 args:
