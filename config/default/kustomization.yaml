@@ -54,10 +54,9 @@ patches:
     target:
       kind: Deployment
 
-  # Set image pull policy to Always
-  - path: manager_image_pull_policy_patch.yaml
-    target:
-      kind: Deployment
+  # - path: manager_image_pull_policy_patch.yaml
+  #   target:
+  #     kind: Deployment
 
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER' prefix.
 # Uncomment the following replacements to add the cert-manager CA injection annotations

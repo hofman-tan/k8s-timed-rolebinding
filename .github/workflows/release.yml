@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: hofman-tan/k8s-timed-rolebinding-controller
+  IMAGE_NAME: hofman-tan/k8s-timed-rolebinding-operator
 
 jobs:
   build-and-push:
