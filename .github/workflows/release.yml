@@ -64,7 +64,7 @@ jobs:
           check-latest: false
 
       - name: Build installer manifest
-        run: make build-installer IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.event.release.tag_name }}
+        run: make build-installer IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
 
       - name: Upload install.yaml to release
         uses: svenstaro/upload-release-action@v2
